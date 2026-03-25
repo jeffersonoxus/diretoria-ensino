@@ -19,7 +19,8 @@ import {
   Activity,
   Users,
   Pencil,
-  Trash2
+  Trash2,
+  Search
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -54,7 +55,7 @@ interface Setor {
   id: string
   nome: string
   descricao?: string
-  pessoas: string[]
+  pessoas: string[] // Este array deve conter IDs de perfis, não nomes
 }
 
 interface ParametroExtra {
@@ -79,6 +80,7 @@ export default function AdminPage() {
   const [perfis, setPerfis] = useState<Perfil[]>([])
   const [setores, setSetores] = useState<Setor[]>([])
   const [tiposAcoes, setTiposAcoes] = useState<TipoAcao[]>([])
+  const [searchPerfil, setSearchPerfil] = useState('')
 
   useEffect(() => {
     carregarDados()
@@ -121,19 +123,24 @@ export default function AdminPage() {
     }
   }
 
+  const perfisFiltrados = perfis.filter(p => 
+    p.nome.toLowerCase().includes(searchPerfil.toLowerCase()) ||
+    p.email.toLowerCase().includes(searchPerfil.toLowerCase())
+  )
+
   return (
-    <div className="min-h-screen p-4 md:p-8 bg-[#f8fafc] text-slate-800 font-sans">
+    <div className="min-h-screen p-4 md:p-8 bg-gradient-to-br from-[#7114dd]/10 to-[#a94dff]/10 text-slate-800 font-sans">
       <header className="mb-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Painel Admin</h1>
-            <p className="text-slate-500 font-medium">Gestão de Setores e Modelos de Ação</p>
+            <p className="text-slate-500 font-medium">Gestão de Setores e Modelos de Ação versão 1</p>
           </div>
           <div className="flex gap-2">
-             <button onClick={() => setActiveModal('setor')} className="bg-white text-indigo-600 border border-indigo-100 px-4 py-2 rounded-xl hover:bg-indigo-50 transition shadow-sm flex items-center gap-2 font-bold text-sm">
+             <button onClick={() => setActiveModal('setor')} className="bg-white text-[#7114dd] border border-[#7114dd]/20 px-4 py-2 rounded-xl hover:bg-[#7114dd]/5 transition shadow-sm flex items-center gap-2 font-bold text-sm">
                <Plus size={18}/> Novo Setor
              </button>
-             <button onClick={() => setActiveModal('tipo_acao')} className="bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition shadow-md flex items-center gap-2 font-bold text-sm">
+             <button onClick={() => setActiveModal('tipo_acao')} className="bg-[#7114dd] text-white px-4 py-2 rounded-xl hover:bg-[#a94dff] transition shadow-md flex items-center gap-2 font-bold text-sm">
                <Plus size={18}/> Novo Modelo de Ação
              </button>
           </div>
@@ -144,7 +151,7 @@ export default function AdminPage() {
          {/* Setores */}
          <div className="space-y-4">
           <h2 className="text-xl font-bold flex items-center gap-2 px-1">
-            <FolderTree className="text-indigo-600" size={20} /> Setores Cadastrados
+            <FolderTree className="text-[#7114dd]" size={20} /> Setores Cadastrados
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {setores.map((setor) => (
@@ -154,7 +161,7 @@ export default function AdminPage() {
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
                     <button 
                       onClick={() => { setSetorParaEditar(setor); setActiveModal('setor'); }} 
-                      className="text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-lg transition"
+                      className="text-[#7114dd] hover:bg-[#7114dd]/10 p-1.5 rounded-lg transition"
                     >
                       <Pencil size={14} />
                     </button>
@@ -170,6 +177,23 @@ export default function AdminPage() {
                 <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
                   <Users size={12}/> {setor.pessoas?.length || 0} Membros
                 </div>
+                {setor.pessoas && setor.pessoas.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {setor.pessoas.slice(0, 3).map(pessoaId => {
+                      const perfil = perfis.find(p => p.id === pessoaId)
+                      return perfil ? (
+                        <span key={pessoaId} className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded-full">
+                          {perfil.nome.split(' ')[0]}
+                        </span>
+                      ) : null
+                    })}
+                    {setor.pessoas.length > 3 && (
+                      <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded-full">
+                        +{setor.pessoas.length - 3}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -178,7 +202,7 @@ export default function AdminPage() {
          {/* Modelos de Ação */}
          <div className="space-y-4">
           <h2 className="text-xl font-bold flex items-center gap-2 px-1">
-            <Workflow className="text-indigo-600" size={20} /> Modelos de Ações
+            <Workflow className="text-[#7114dd]" size={20} /> Modelos de Ações
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {tiposAcoes.map((ta) => (
@@ -186,7 +210,7 @@ export default function AdminPage() {
                 <div className="absolute top-0 right-0 p-2 flex gap-1 opacity-0 group-hover:opacity-100 transition z-10">
                   <button 
                     onClick={() => { setTipoAcaoParaEditar(ta); setActiveModal('tipo_acao'); }} 
-                    className="bg-white shadow-md p-1.5 rounded-lg hover:bg-indigo-50"
+                    className="bg-white shadow-md p-1.5 rounded-lg hover:bg-[#7114dd]/10"
                   >
                     <Pencil size={12} />
                   </button>
@@ -198,11 +222,11 @@ export default function AdminPage() {
                   </button>
                 </div>
                 <h3 className="font-black text-slate-900 mb-1 pr-16">{ta.nome}</h3>
-                <p className="text-[10px] text-indigo-600 font-bold uppercase mb-3">
+                <p className="text-[10px] text-[#7114dd] font-bold uppercase mb-3">
                   {ta.setores_ids.length === setores.length ? 'Todos os Setores' : `${ta.setores_ids.length} Setores`}
                 </p>
                 <div className="flex flex-wrap gap-2 mt-auto">
-                   <span className="text-[9px] bg-amber-50 text-amber-600 px-2 py-1 rounded-md font-bold border border-amber-100">
+                   <span className="text-[9px] bg-[#ffa301]/20 text-[#7114dd] px-2 py-1 rounded-md font-bold border border-[#ffa301]/30">
                      +{ta.parametros_extras.length} Custom
                    </span>
                 </div>
@@ -239,18 +263,33 @@ export default function AdminPage() {
   )
 }
 
-// --- Componente FormSetor (Atualizado para edição) ---
+// --- Componente FormSetor (Corrigido para usar IDs de perfil) ---
 function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis: Perfil[], onSuccess: () => void, dadosIniciais?: Setor | null }) {
   const supabase = createClient()
   const [nome, setNome] = useState(dadosIniciais?.nome || '')
   const [desc, setDesc] = useState(dadosIniciais?.descricao || '')
-  const [sel, setSel] = useState<string[]>(dadosIniciais?.pessoas || [])
+  const [pessoasSelecionadas, setPessoasSelecionadas] = useState<string[]>(dadosIniciais?.pessoas || [])
   const [loading, setLoading] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+
+  const perfisFiltrados = listaDePerfis.filter(p => 
+    p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.email.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!nome) {
+      alert("Nome do setor é obrigatório")
+      return
+    }
+    
     setLoading(true)
-    const payload = { nome, descricao: desc, pessoas: sel }
+    const payload = { 
+      nome, 
+      descricao: desc, 
+      pessoas: pessoasSelecionadas 
+    }
     
     let error
     if (dadosIniciais?.id) {
@@ -269,32 +308,122 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
     setLoading(false)
   }
 
+  const togglePessoa = (pessoaId: string) => {
+    setPessoasSelecionadas(prev => 
+      prev.includes(pessoaId) 
+        ? prev.filter(id => id !== pessoaId)
+        : [...prev, pessoaId]
+    )
+  }
+
   return (
     <form onSubmit={handleSave} className="space-y-6">
-      <h2 className="text-2xl font-black">{dadosIniciais ? 'Editar Setor' : 'Configurar Setor'}</h2>
+      <div className="flex items-center gap-4 border-b pb-6">
+        <div className="h-12 w-12 bg-[#ffa301] rounded-xl flex items-center justify-center text-white shadow-lg">
+          <FolderTree />
+        </div>
+        <div>
+          <h2 className="text-2xl font-black">{dadosIniciais ? 'Editar Setor' : 'Configurar Setor'}</h2>
+          <p className="text-slate-500 text-sm font-medium">
+            {dadosIniciais ? 'Atualize as informações do setor' : 'Crie um novo setor e adicione membros'}
+          </p>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <input className="border p-4 rounded-xl" placeholder="Nome" value={nome} onChange={e => setNome(e.target.value)} required />
-        <input className="border p-4 rounded-xl" placeholder="Descrição" value={desc} onChange={e => setDesc(e.target.value)} />
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome do Setor *</label>
+          <input 
+            className="w-full border p-4 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 ring-[#7114dd] transition" 
+            placeholder="Ex: Educação Infantil" 
+            value={nome} 
+            onChange={e => setNome(e.target.value)} 
+            required 
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-400 uppercase ml-1">Descrição</label>
+          <input 
+            className="w-full border p-4 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 ring-[#7114dd] transition" 
+            placeholder="Breve descrição do setor" 
+            value={desc} 
+            onChange={e => setDesc(e.target.value)} 
+          />
+        </div>
       </div>
-      <div className="bg-slate-50 p-4 rounded-2xl border h-64 overflow-y-auto grid grid-cols-2 gap-2">
-        {listaDePerfis.map(p => (
-          <div 
-            key={p.id} 
-            onClick={() => setSel(prev => prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id])} 
-            className={`p-3 rounded-lg cursor-pointer text-xs font-bold border transition ${sel.includes(p.id) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white'}`}
-          >
-            {p.nome}
-          </div>
-        ))}
+
+      <div className="space-y-2">
+        <label className="text-xs font-bold text-slate-400 uppercase ml-1 flex items-center justify-between">
+          <span>Membros do Setor (selecione os perfis)</span>
+          <span className="text-[10px] text-[#7114dd] font-normal">
+            {pessoasSelecionadas.length} membro(s) selecionado(s)
+          </span>
+        </label>
+        
+        {/* Barra de busca */}
+        <div className="relative mb-3">
+          <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar por nome ou email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
+          />
+        </div>
+
+        <div className="bg-slate-50 p-4 rounded-2xl border h-64 overflow-y-auto">
+          {perfisFiltrados.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">
+              Nenhum perfil encontrado
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {perfisFiltrados.map(p => (
+                <div 
+                  key={p.id} 
+                  onClick={() => togglePessoa(p.id)} 
+                  className={`p-3 rounded-lg cursor-pointer text-xs font-bold border transition-all ${
+                    pessoasSelecionadas.includes(p.id) 
+                      ? 'bg-[#7114dd] text-white border-[#7114dd] shadow-md' 
+                      : 'bg-white hover:bg-[#7114dd]/5 border-gray-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${
+                      pessoasSelecionadas.includes(p.id) 
+                        ? 'bg-white text-[#7114dd]' 
+                        : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      {p.nome.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate font-semibold">{p.nome}</div>
+                      <div className="truncate text-[9px] opacity-70">{p.email}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        
+        <p className="text-[10px] text-gray-400 mt-2">
+          ⚠️ Apenas usuários selecionados aqui terão acesso a este setor
+        </p>
       </div>
-      <button disabled={loading} className="w-full bg-indigo-600 text-white p-4 rounded-xl font-bold disabled:opacity-50">
+
+      <button 
+        disabled={loading} 
+        className="w-full bg-gradient-to-r from-[#7114dd] to-[#a94dff] text-white p-4 rounded-xl font-bold disabled:opacity-50 hover:shadow-lg transition-all"
+      >
         {loading ? 'Salvando...' : dadosIniciais ? 'Atualizar Setor' : 'Salvar Setor'}
       </button>
     </form>
   )
 }
 
-// --- Componente FormTipoAcao (Atualizado para edição) ---
+// --- Componente FormTipoAcao (Atualizado com as novas cores) ---
 function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[], dadosIniciais?: TipoAcao | null, onSuccess: () => void }) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
@@ -345,7 +474,9 @@ function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[],
   return (
     <form onSubmit={handleSave} className="space-y-8">
       <div className="flex items-center gap-4 border-b pb-6">
-        <div className="h-12 w-12 bg-amber-500 rounded-xl flex items-center justify-center text-white shadow-lg"><Blocks /></div>
+        <div className="h-12 w-12 bg-gradient-to-r from-[#7114dd] to-[#a94dff] rounded-xl flex items-center justify-center text-white shadow-lg">
+          <Blocks />
+        </div>
         <div>
           <h2 className="text-2xl font-black">{dadosIniciais ? 'Editar Modelo de Ação' : 'Novo Modelo de Ação'}</h2>
           <p className="text-slate-500 text-sm font-medium">Configure campos obrigatórios e personalizados</p>
@@ -357,21 +488,25 @@ function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[],
         <div className="space-y-6">
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome do Modelo</label>
-            <input className="w-full border p-4 rounded-2xl bg-slate-50 focus:bg-white outline-none focus:ring-2 ring-indigo-500 transition" 
-                   placeholder="Ex: Monitoramento Escolar" value={nome} onChange={e => setNome(e.target.value)} />
+            <input className="w-full border p-4 rounded-2xl bg-slate-50 focus:bg-white outline-none focus:ring-2 ring-[#7114dd] transition" 
+                   placeholder="Ex: Monitoramento Escolar" value={nome} onChange={e => setNome(e.target.value)} required />
           </div>
 
           <div className="space-y-2">
             <div className="flex justify-between items-center ml-1">
               <label className="text-xs font-bold text-slate-400 uppercase">Setores que podem usar</label>
-              <button type="button" onClick={selecionarTodosSetores} className="text-[10px] font-black text-indigo-600 uppercase">
+              <button type="button" onClick={selecionarTodosSetores} className="text-[10px] font-black text-[#7114dd] uppercase hover:underline">
                 {setoresIds.length === setores.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
               </button>
             </div>
             <div className="flex flex-wrap gap-2 bg-slate-50 p-3 rounded-2xl border">
               {setores.map(s => (
                 <button key={s.id} type="button" onClick={() => toggleSetor(s.id)}
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition ${setoresIds.includes(s.id) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-500'}`}>
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition ${
+                          setoresIds.includes(s.id) 
+                            ? 'bg-[#7114dd] text-white border-[#7114dd]' 
+                            : 'bg-white border-slate-200 text-slate-500 hover:border-[#7114dd] hover:text-[#7114dd]'
+                        }`}>
                   {s.nome}
                 </button>
               ))}
@@ -405,7 +540,7 @@ function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[],
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <label className="text-xs font-bold text-slate-400 uppercase">Campos Personalizados</label>
-            <button type="button" onClick={adicionarCampo} className="text-[10px] bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1">
+            <button type="button" onClick={adicionarCampo} className="text-[10px] bg-[#7114dd] text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-[#a94dff] transition">
               <Plus size={12}/> Add Campo
             </button>
           </div>
@@ -419,11 +554,11 @@ function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[],
             {extras.map((campo) => (
               <div key={campo.id} className="bg-white p-4 rounded-2xl border shadow-sm space-y-3">
                 <div className="flex gap-2">
-                  <input className="flex-1 bg-slate-50 border-none p-2 rounded-lg text-sm font-bold outline-none focus:ring-1 ring-indigo-500" 
+                  <input className="flex-1 bg-slate-50 border-none p-2 rounded-lg text-sm font-bold outline-none focus:ring-1 ring-[#7114dd]" 
                          placeholder="Nome do Campo (ex: KM Inicial)" value={campo.label} onChange={e => setExtras(extras.map(ex => ex.id === campo.id ? {...ex, label: e.target.value} : ex))} />
-                  <button type="button" onClick={() => setExtras(extras.filter(ex => ex.id !== campo.id))} className="text-red-400 p-2"><X size={16}/></button>
+                  <button type="button" onClick={() => setExtras(extras.filter(ex => ex.id !== campo.id))} className="text-red-400 p-2 hover:text-red-600"><X size={16}/></button>
                 </div>
-                <select className="w-full bg-slate-50 p-2 rounded-lg text-xs font-bold outline-none border-none" value={campo.tipo} onChange={e => setExtras(extras.map(ex => ex.id === campo.id ? {...ex, tipo: e.target.value as any} : ex))}>
+                <select className="w-full bg-slate-50 p-2 rounded-lg text-xs font-bold outline-none border-none focus:ring-1 ring-[#7114dd]" value={campo.tipo} onChange={e => setExtras(extras.map(ex => ex.id === campo.id ? {...ex, tipo: e.target.value as any} : ex))}>
                   <option value="text">Texto</option>
                   <option value="number">Número</option>
                   <option value="boolean">Sim/Não</option>
@@ -434,7 +569,7 @@ function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[],
                   <input className="w-full border-b text-[10px] p-1 outline-none font-medium" 
                          placeholder="Opções separadas por vírgula" 
                          defaultValue={campo.opcoes?.join(', ')} 
-                         onChange={e => setExtras(extras.map(ex => ex.id === campo.id ? {...ex, opcoes: e.target.value.split(',').map(s => s.trim())} : ex))} />
+                         onChange={e => setExtras(extras.map(ex => ex.id === campo.id ? {...ex, opcoes: e.target.value.split(',').map(s => s.trim()).filter(s => s)} : ex))} />
                 )}
               </div>
             ))}
@@ -442,7 +577,7 @@ function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[],
         </div>
       </div>
 
-      <button disabled={loading} className="w-full bg-indigo-600 text-white p-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-indigo-100 hover:scale-[1.01] transition disabled:opacity-50">
+      <button disabled={loading} className="w-full bg-gradient-to-r from-[#7114dd] to-[#a94dff] text-white p-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl hover:shadow-2xl transition-all disabled:opacity-50">
         {loading ? 'Salvando...' : dadosIniciais ? 'Atualizar Modelo' : 'Publicar Modelo de Ação'}
       </button>
     </form>
