@@ -121,12 +121,21 @@ export default function AcoesPage() {
   const [status, setStatus] = useState('Pendente')
   const [dadosExtras, setDadosExtras] = useState<Record<string, any>>({})
 
-  // Buscar perfil do usuário atual
-  const getCurrentUserPerfil = async () => {
+  // Buscar perfil do usuário atual - RETORNA O ID DIRETAMENTE
+  const getCurrentUserPerfil = async (): Promise<string | null> => {
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError) throw userError
-      if (!user) return null
+      if (userError) {
+        console.error("❌ Erro ao buscar usuário:", userError)
+        throw userError
+      }
+      if (!user) {
+        console.log("❌ Nenhum usuário logado")
+        return null
+      }
+      
+      console.log("✅ Usuário logado:", user.email)
+      console.log("📋 User ID:", user.id)
       
       const { data: perfil, error: perfilError } = await supabase
         .from('perfis')
@@ -134,16 +143,55 @@ export default function AcoesPage() {
         .eq('email', user.email)
         .single()
       
-      if (perfilError) throw perfilError
+      let perfilId = null
+      let perfilNome = ''
+      
+      if (perfilError) {
+        console.error("❌ Erro ao buscar perfil:", perfilError)
+        // Se o perfil não existe, vamos criar um
+        if (perfilError.code === 'PGRST116') {
+          console.log("📝 Perfil não encontrado, criando novo perfil...")
+          const novoPerfil = {
+            id: user.id,
+            nome: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário',
+            email: user.email
+          }
+          
+          const { data: novoPerfilData, error: createError } = await supabase
+            .from('perfis')
+            .insert([novoPerfil])
+            .select('id, nome')
+            .single()
+          
+          if (createError) {
+            console.error("❌ Erro ao criar perfil:", createError)
+            throw createError
+          }
+          
+          if (novoPerfilData) {
+            console.log("✅ Perfil criado:", novoPerfilData)
+            perfilId = novoPerfilData.id
+            perfilNome = novoPerfilData.nome
+          }
+        } else {
+          throw perfilError
+        }
+      }
       
       if (perfil) {
-        setUserPerfilId(perfil.id)
-        setUserNome(perfil.nome)
-        return perfil.id
+        console.log("✅ Perfil encontrado:", perfil)
+        perfilId = perfil.id
+        perfilNome = perfil.nome
+      }
+      
+      if (perfilId) {
+        setUserPerfilId(perfilId)
+        setUserNome(perfilNome)
+        return perfilId
       }
       return null
     } catch (error) {
-      console.error("Erro ao buscar perfil:", error)
+      console.error("❌ Erro ao buscar/criar perfil:", error)
       return null
     }
   }
@@ -166,26 +214,47 @@ export default function AcoesPage() {
     }
   }
 
-  const findUserSetores = async () => {
-    if (!userPerfilId) return []
+  // Buscar setores do usuário - RECEBE O ID COMO PARÂMETRO
+  const findUserSetores = async (perfilId: string) => {
+    if (!perfilId) {
+      console.log("❌ perfilId é null, não é possível buscar setores")
+      return []
+    }
+    
+    console.log("🔍 Buscando setores para o perfil ID:", perfilId)
     
     try {
       const { data: setoresData, error } = await supabase
         .from('setores')
         .select('*')
       
-      if (error) throw error
+      if (error) {
+        console.error("❌ Erro ao buscar setores:", error)
+        throw error
+      }
+      
+      console.log("📋 Todos os setores encontrados:", setoresData?.length || 0)
+      console.log("📋 Detalhes dos setores:", setoresData?.map(s => ({ id: s.id, nome: s.nome, pessoas: s.pessoas })))
       
       const setoresDoUsuario = setoresData?.filter(setor => {
         const pessoasSetor = setor.pessoas || []
-        return pessoasSetor.includes(userPerfilId)
+        const inclui = pessoasSetor.includes(perfilId)
+        if (inclui) {
+          console.log(`✅ Usuário está no setor: ${setor.nome} (ID: ${setor.id})`)
+          console.log(`   Pessoas no setor:`, pessoasSetor)
+        }
+        return inclui
       }) || []
+      
+      console.log(`📊 Total de setores encontrados para o usuário: ${setoresDoUsuario.length}`)
       
       const setoresIds = setoresDoUsuario.map(s => s.id)
       setUserSetoresIds(setoresIds)
+      console.log("📋 Setores IDs do usuário:", setoresIds)
+      
       return setoresIds
     } catch (error) {
-      console.error("Erro ao buscar setores do usuário:", error)
+      console.error("❌ Erro ao buscar setores do usuário:", error)
       return []
     }
   }
@@ -281,25 +350,32 @@ export default function AcoesPage() {
     }
   }
 
-  // Inicialização
+  // Inicialização - CORRIGIDO COM PASSAGEM DE PARÂMETRO
   useEffect(() => {
     const init = async () => {
       setLoading(true)
       setError(null)
       
-      // Primeiro, buscar o perfil do usuário
-      const perfilId = await getCurrentUserPerfil()
+      console.log("🚀 Iniciando carregamento de dados...")
       
-      // Depois, carregar os outros dados
+      // 1. Primeiro, buscar o perfil do usuário (retorna o ID)
+      const perfilId = await getCurrentUserPerfil()
+      console.log("📌 Perfil ID obtido:", perfilId)
+      
+      // 2. Carregar dados básicos
       await loadUserData()
       await fetchSetores()
       await fetchTiposAcoes()
       
-      // Se temos perfil ID, buscar os setores
+      // 3. Buscar os setores do usuário PASSANDO O ID COMO PARÂMETRO
       if (perfilId) {
-        await findUserSetores()
+        console.log("🔍 Buscando setores para o perfil ID:", perfilId)
+        await findUserSetores(perfilId)
+      } else {
+        console.log("❌ Perfil ID não encontrado, não é possível buscar setores")
       }
       
+      console.log("✅ Carregamento concluído")
       setLoading(false)
       
       // Parar a animação de pulse após 5 segundos
@@ -307,8 +383,28 @@ export default function AcoesPage() {
         setAnimacaoPulse(false)
       }, 5000)
     }
+    
     init()
   }, [])
+
+  // DEBUG - Verificar acesso do usuário
+  useEffect(() => {
+    if (!loading && userPerfilId) {
+      console.log("=== DEBUG DO ACESSO ===")
+      console.log("User Perfil ID:", userPerfilId)
+      console.log("User Setores IDs:", userSetoresIds)
+      console.log("Setores disponíveis:", setores.map(s => ({ id: s.id, nome: s.nome, pessoas: s.pessoas })))
+      console.log("Usuário está em setores?", userSetoresIds.length > 0)
+      
+      // Verificar se o perfil está no setor EJA
+      const setorEJA = setores.find(s => s.nome === 'EJA')
+      if (setorEJA) {
+        const estaNoEJA = setorEJA.pessoas.includes(userPerfilId)
+        console.log("Está no setor EJA?", estaNoEJA)
+        console.log("IDs no setor EJA:", setorEJA.pessoas)
+      }
+    }
+  }, [loading, userPerfilId, userSetoresIds, setores])
 
   // Carregar ações e usuários quando os setores do usuário estiverem disponíveis
   useEffect(() => {
@@ -721,6 +817,13 @@ export default function AcoesPage() {
           <p className="text-sm text-gray-500">
             Entre em contato com o administrador para ser adicionado a um setor.
           </p>
+          <div className="mt-4 p-3 bg-gray-100 rounded-lg text-left">
+            <p className="text-xs font-mono">
+              Seu ID: {userPerfilId || 'Não carregado'}<br/>
+              Email: {userEmail}<br/>
+              Nome: {userNome}
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -739,10 +842,9 @@ export default function AcoesPage() {
                 Gerenciamento de Ações
               </h1>
               <p className="text-gray-500 mt-1">
-                {!isAdmin && (
-                  setoresDoUsuario.length === 1 
-                    ? setoresDoUsuario[0]?.nome 
-                    : `${setoresDoUsuario.length} setores`
+                Olá, {userNome}!
+                {!isAdmin && setoresDoUsuario.length > 0 && (
+                  <span> • Setor(es): {setoresDoUsuario.map(s => s.nome).join(', ')}</span>
                 )}
                 {isAdmin && (setorSelecionado ? setores.find(s => s.id === setorSelecionado)?.nome : 'Todos os Setores')}
               </p>

@@ -20,7 +20,9 @@ import {
   Users,
   Pencil,
   Trash2,
-  Search
+  Search,
+  AlertCircle,
+  CheckCircle
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -55,7 +57,7 @@ interface Setor {
   id: string
   nome: string
   descricao?: string
-  pessoas: string[] // Este array deve conter IDs de perfis, não nomes
+  pessoas: string[]
 }
 
 interface ParametroExtra {
@@ -87,13 +89,20 @@ export default function AdminPage() {
   }, [])
 
   const carregarDados = async () => {
+    console.log("🔄 Carregando dados do admin...")
     const [p, s, ta] = await Promise.all([
       supabase.from('perfis').select('*'),
       supabase.from('setores').select('*'),
       supabase.from('tipo_acao').select('*')
     ])
-    if (p.data) setPerfis(p.data)
-    if (s.data) setSetores(s.data)
+    if (p.data) {
+      console.log(`📋 ${p.data.length} perfis carregados:`, p.data.map(perfil => ({ id: perfil.id, nome: perfil.nome, email: perfil.email })))
+      setPerfis(p.data)
+    }
+    if (s.data) {
+      console.log(`📋 ${s.data.length} setores carregados:`, s.data.map(setor => ({ id: setor.id, nome: setor.nome, pessoas: setor.pessoas })))
+      setSetores(s.data)
+    }
     if (ta.data) setTiposAcoes(ta.data)
   }
 
@@ -134,7 +143,7 @@ export default function AdminPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Painel Admin</h1>
-            <p className="text-slate-500 font-medium">Gestão de Setores e Modelos de Ação versão 1</p>
+            <p className="text-slate-500 font-medium">Gestão de Setores e Modelos de Ação</p>
           </div>
           <div className="flex gap-2">
              <button onClick={() => setActiveModal('setor')} className="bg-white text-[#7114dd] border border-[#7114dd]/20 px-4 py-2 rounded-xl hover:bg-[#7114dd]/5 transition shadow-sm flex items-center gap-2 font-bold text-sm">
@@ -173,7 +182,7 @@ export default function AdminPage() {
                     </button>
                   </div>
                 </div>
-                <p className="text-xs text-slate-500 mb-4 line-clamp-1">{setor.descricao}</p>
+                <p className="text-xs text-slate-500 mb-4 line-clamp-1">{setor.descricao || 'Sem descrição'}</p>
                 <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
                   <Users size={12}/> {setor.pessoas?.length || 0} Membros
                 </div>
@@ -182,10 +191,14 @@ export default function AdminPage() {
                     {setor.pessoas.slice(0, 3).map(pessoaId => {
                       const perfil = perfis.find(p => p.id === pessoaId)
                       return perfil ? (
-                        <span key={pessoaId} className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded-full">
+                        <span key={pessoaId} className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded-full" title={perfil.email}>
                           {perfil.nome.split(' ')[0]}
                         </span>
-                      ) : null
+                      ) : (
+                        <span key={pessoaId} className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full" title="Usuário não encontrado">
+                          ID: {pessoaId.slice(0, 6)}
+                        </span>
+                      )
                     })}
                     {setor.pessoas.length > 3 && (
                       <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded-full">
@@ -263,7 +276,7 @@ export default function AdminPage() {
   )
 }
 
-// --- Componente FormSetor (Corrigido para usar IDs de perfil) ---
+// --- Componente FormSetor ---
 function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis: Perfil[], onSuccess: () => void, dadosIniciais?: Setor | null }) {
   const supabase = createClient()
   const [nome, setNome] = useState(dadosIniciais?.nome || '')
@@ -271,6 +284,7 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
   const [pessoasSelecionadas, setPessoasSelecionadas] = useState<string[]>(dadosIniciais?.pessoas || [])
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [debugInfo, setDebugInfo] = useState('')
 
   const perfisFiltrados = listaDePerfis.filter(p => 
     p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -285,35 +299,72 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
     }
     
     setLoading(true)
+    setDebugInfo('Salvando...')
+    
     const payload = { 
       nome, 
       descricao: desc, 
       pessoas: pessoasSelecionadas 
     }
     
+    console.log("📦 Payload a ser salvo:", payload)
+    console.log("📋 Pessoas selecionadas (IDs):", pessoasSelecionadas)
+    
+    const nomesSelecionados = pessoasSelecionadas.map(id => {
+      const perfil = listaDePerfis.find(p => p.id === id)
+      return perfil ? perfil.nome : id
+    })
+    console.log("👥 Nomes das pessoas selecionadas:", nomesSelecionados)
+    
     let error
     if (dadosIniciais?.id) {
-      const result = await supabase.from('setores').update(payload).eq('id', dadosIniciais.id)
+      console.log("✏️ Atualizando setor existente:", dadosIniciais.id)
+      const result = await supabase
+        .from('setores')
+        .update(payload)
+        .eq('id', dadosIniciais.id)
       error = result.error
+      if (!error) {
+        setDebugInfo('Setor atualizado com sucesso!')
+      }
     } else {
-      const result = await supabase.from('setores').insert([payload])
+      console.log("➕ Criando novo setor")
+      const result = await supabase
+        .from('setores')
+        .insert([payload])
       error = result.error
+      if (!error) {
+        setDebugInfo('Setor criado com sucesso!')
+      }
     }
     
-    if (!error) {
-      onSuccess()
-    } else {
+    if (error) {
+      console.error("❌ Erro ao salvar:", error)
       alert('Erro ao salvar: ' + error.message)
+      setDebugInfo('Erro: ' + error.message)
+    } else {
+      console.log("✅ Salvou com sucesso!")
+      setTimeout(() => {
+        onSuccess()
+      }, 1000)
     }
     setLoading(false)
   }
 
   const togglePessoa = (pessoaId: string) => {
-    setPessoasSelecionadas(prev => 
-      prev.includes(pessoaId) 
+    setPessoasSelecionadas(prev => {
+      const novaLista = prev.includes(pessoaId) 
         ? prev.filter(id => id !== pessoaId)
         : [...prev, pessoaId]
-    )
+      
+      const nomes = novaLista.map(id => {
+        const perfil = listaDePerfis.find(p => p.id === id)
+        return perfil ? perfil.nome : id
+      })
+      console.log("👥 Lista atualizada de membros:", nomes)
+      
+      return novaLista
+    })
   }
 
   return (
@@ -322,11 +373,14 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
         <div className="h-12 w-12 bg-[#ffa301] rounded-xl flex items-center justify-center text-white shadow-lg">
           <FolderTree />
         </div>
-        <div>
+        <div className="flex-1">
           <h2 className="text-2xl font-black">{dadosIniciais ? 'Editar Setor' : 'Configurar Setor'}</h2>
           <p className="text-slate-500 text-sm font-medium">
             {dadosIniciais ? 'Atualize as informações do setor' : 'Crie um novo setor e adicione membros'}
           </p>
+          {debugInfo && (
+            <p className="text-xs text-green-600 mt-1">{debugInfo}</p>
+          )}
         </div>
       </div>
 
@@ -360,7 +414,6 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
           </span>
         </label>
         
-        {/* Barra de busca */}
         <div className="relative mb-3">
           <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
           <input
@@ -372,44 +425,65 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
           />
         </div>
 
-        <div className="bg-slate-50 p-4 rounded-2xl border h-64 overflow-y-auto">
+        <div className="bg-slate-50 p-4 rounded-2xl border h-96 overflow-y-auto">
           {perfisFiltrados.length === 0 ? (
             <div className="text-center py-8 text-gray-400 text-sm">
               Nenhum perfil encontrado
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
-              {perfisFiltrados.map(p => (
-                <div 
-                  key={p.id} 
-                  onClick={() => togglePessoa(p.id)} 
-                  className={`p-3 rounded-lg cursor-pointer text-xs font-bold border transition-all ${
-                    pessoasSelecionadas.includes(p.id) 
-                      ? 'bg-[#7114dd] text-white border-[#7114dd] shadow-md' 
-                      : 'bg-white hover:bg-[#7114dd]/5 border-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${
-                      pessoasSelecionadas.includes(p.id) 
-                        ? 'bg-white text-[#7114dd]' 
-                        : 'bg-gray-200 text-gray-600'
-                    }`}>
-                      {p.nome.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="truncate font-semibold">{p.nome}</div>
-                      <div className="truncate text-[9px] opacity-70">{p.email}</div>
+            <div className="grid grid-cols-1 gap-2">
+              {perfisFiltrados.map(p => {
+                const isSelected = pessoasSelecionadas.includes(p.id)
+                return (
+                  <div 
+                    key={p.id} 
+                    onClick={() => togglePessoa(p.id)} 
+                    className={`p-3 rounded-lg cursor-pointer text-xs font-bold border transition-all ${
+                      isSelected 
+                        ? 'bg-[#7114dd] text-white border-[#7114dd] shadow-md' 
+                        : 'bg-white hover:bg-[#7114dd]/5 border-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                        isSelected 
+                          ? 'bg-white text-[#7114dd]' 
+                          : 'bg-gray-200 text-gray-600'
+                      }`}>
+                        {p.nome.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm truncate">{p.nome}</div>
+                        <div className="text-[10px] opacity-70 truncate">{p.email}</div>
+                      </div>
+                      {isSelected && (
+                        <CheckCircle size={14} className="text-white" />
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
         
+        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <p className="text-xs text-blue-700 flex items-center gap-2">
+            <AlertCircle size={12} />
+            <span className="font-medium">IDs dos membros selecionados:</span>
+            {pessoasSelecionadas.map(id => {
+              const perfil = listaDePerfis.find(p => p.id === id)
+              return (
+                <span key={id} className="text-[10px] bg-blue-100 px-1.5 py-0.5 rounded" title={id}>
+                  {perfil?.nome?.split(' ')[0] || id.slice(0, 8)}
+                </span>
+              )
+            })}
+          </p>
+        </div>
+        
         <p className="text-[10px] text-gray-400 mt-2">
-          ⚠️ Apenas usuários selecionados aqui terão acesso a este setor
+          ⚠️ Apenas usuários selecionados aqui terão acesso a este setor. Os IDs dos perfis são salvos no formato JSON.
         </p>
       </div>
 
@@ -423,7 +497,7 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
   )
 }
 
-// --- Componente FormTipoAcao (Atualizado com as novas cores) ---
+// --- Componente FormTipoAcao ---
 function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[], dadosIniciais?: TipoAcao | null, onSuccess: () => void }) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
@@ -484,7 +558,6 @@ function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[],
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Lado Esquerdo: Configuração Básica */}
         <div className="space-y-6">
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome do Modelo</label>
@@ -513,7 +586,6 @@ function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[],
             </div>
           </div>
 
-          {/* Seção de Campos Fixos (Apenas Visual) */}
           <div className="space-y-3">
              <label className="text-xs font-bold text-slate-400 uppercase ml-1">Campos Obrigatórios (Padrão)</label>
              <div className="grid grid-cols-1 gap-2">
@@ -536,7 +608,6 @@ function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[],
           </div>
         </div>
 
-        {/* Lado Direito: Parâmetros Extras */}
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <label className="text-xs font-bold text-slate-400 uppercase">Campos Personalizados</label>
