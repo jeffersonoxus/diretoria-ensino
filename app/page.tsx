@@ -96,16 +96,16 @@ export default async function HomePage() {
   ]
 
   const highlights = [
-    { number: "15.000+", label: "Estudantes atendidos", icon: Users },
-    { number: "850+", label: "Educadores dedicados", icon: Star },
-    { number: "32", label: "Escolas da rede", icon: GraduationCap },
+    { number: "18.000+", label: "Estudantes atendidos", icon: Users },
+    { number: "1000+", label: "Educadores dedicados", icon: Star },
+    { number: "40", label: "Escolas da rede", icon: GraduationCap },
     { number: "9", label: "Setores especializados", icon: Target }
   ]
 
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-[#7114dd] via-[#7114dd] to-[#a94dff] text-white overflow-hidden">
+      <section className="relative bg-linear-to-br from-[#7114dd] via-[#7114dd] to-[#a94dff] text-white overflow-hidden">
         {/* Grid pattern usando div com background image via style inline */}
         <div 
           className="absolute inset-0 opacity-20"
@@ -214,7 +214,7 @@ export default async function HomePage() {
                   key={index}
                   className="group relative bg-white rounded-2xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
                 >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${sector.color} opacity-0 group-hover:opacity-5 rounded-2xl transition-opacity`} />
+                  <div className={`absolute inset-0 bg-linear-to-br ${sector.color} opacity-0 group-hover:opacity-5 rounded-2xl transition-opacity`} />
                   
                   <div className={`inline-flex p-3 ${sector.bgColor} rounded-xl mb-4`}>
                     <Icon className={`h-6 w-6 text-${sector.color.split('from-')[1].split(' ')[0]}`} style={{ color: sector.color.split('from-')[1].split(' ')[0] }} />
@@ -231,7 +231,7 @@ export default async function HomePage() {
                   <div className="space-y-2">
                     {sector.features.map((feature, idx) => (
                       <div key={idx} className="flex items-center text-sm text-gray-500">
-                        <div className={`w-1.5 h-1.5 rounded-full bg-gradient-to-r ${sector.color} mr-2`} />
+                        <div className={`w-1.5 h-1.5 rounded-full bg-linear-to-r ${sector.color} mr-2`} />
                         {feature}
                       </div>
                     ))}
@@ -244,7 +244,7 @@ export default async function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-[#7114dd] to-[#a94dff] text-white relative overflow-hidden">
+      <section className="py-20 bg-linear-to-r from-[#7114dd] to-[#a94dff] text-white relative overflow-hidden">
         {/* Grid pattern usando div com background image via style inline */}
         <div 
           className="absolute inset-0 opacity-20"

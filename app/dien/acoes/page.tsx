@@ -10,6 +10,7 @@ import {
   Calendar, 
   MapPin, 
   Truck,
+  Car,
   X,
   Users,
   Eye,
@@ -32,7 +33,6 @@ interface Usuario {
 
 interface Acao {
   id: string
-  nome: string
   descricao?: string
   pessoas?: string[]
   created_at: string
@@ -89,6 +89,40 @@ const STATUS_OPCOES = [
   'Reagendada'
 ]
 
+// Função para formatar data local para string ISO mantendo o horário local
+const formatarDataParaBanco = (dataLocal: string): string => {
+  if (!dataLocal) return ''
+  
+  const [datePart, timePart] = dataLocal.split('T')
+  const [ano, mes, dia] = datePart.split('-')
+  const [horas, minutos] = timePart.split(':')
+  
+  return `${ano}-${mes}-${dia} ${horas}:${minutos}:00`
+}
+
+// Função para converter data do banco para exibição no input datetime-local
+const formatarDataParaExibicao = (dataBanco: string): string => {
+  if (!dataBanco) return ''
+  
+  let dataStr = dataBanco
+  if (dataStr.includes('+')) {
+    dataStr = dataStr.split('+')[0]
+  }
+  if (dataStr.includes('.')) {
+    dataStr = dataStr.split('.')[0]
+  }
+  
+  if (dataStr.includes('T')) {
+    const [datePart, timePart] = dataStr.split('T')
+    const [horas, minutos] = timePart.split(':')
+    return `${datePart}T${horas}:${minutos}`
+  }
+  
+  const [datePart, timePart] = dataStr.split(' ')
+  const [horas, minutos] = timePart.split(':')
+  return `${datePart}T${horas}:${minutos}`
+}
+
 export default function AcoesPage() {
   const supabase = createClient()
   const [acoes, setAcoes] = useState<Acao[]>([])
@@ -103,7 +137,6 @@ export default function AcoesPage() {
   const [error, setError] = useState<string | null>(null)
   const [editandoAcao, setEditandoAcao] = useState<Acao | null>(null)
   const [formExpandido, setFormExpandido] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [setorSelecionado, setSetorSelecionado] = useState<string | null>(null)
   const [setorConfirmado, setSetorConfirmado] = useState(false)
   const [mostrarListaAcoes, setMostrarListaAcoes] = useState(false)
@@ -121,7 +154,7 @@ export default function AcoesPage() {
   const [status, setStatus] = useState('Pendente')
   const [dadosExtras, setDadosExtras] = useState<Record<string, any>>({})
 
-  // Buscar perfil do usuário atual - RETORNA O ID DIRETAMENTE
+  // Buscar perfil do usuário atual
   const getCurrentUserPerfil = async (): Promise<string | null> => {
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -148,7 +181,6 @@ export default function AcoesPage() {
       
       if (perfilError) {
         console.error("❌ Erro ao buscar perfil:", perfilError)
-        // Se o perfil não existe, vamos criar um
         if (perfilError.code === 'PGRST116') {
           console.log("📝 Perfil não encontrado, criando novo perfil...")
           const novoPerfil = {
@@ -204,17 +236,13 @@ export default function AcoesPage() {
       if (!user) throw new Error("Usuário não está logado")
       
       setUserEmail(user.email || '')
-      
-      // Verificar se é admin
-      const emailsAdmin = ['admin@exemplo.com', 'jeffersonoxus@gmail.com']
-      setIsAdmin(emailsAdmin.includes(user.email || ''))
     } catch (error) {
       console.error("Erro ao carregar dados do usuário:", error)
       setError("Erro ao carregar dados do usuário")
     }
   }
 
-  // Buscar setores do usuário - RECEBE O ID COMO PARÂMETRO
+  // Buscar setores do usuário
   const findUserSetores = async (perfilId: string) => {
     if (!perfilId) {
       console.log("❌ perfilId é null, não é possível buscar setores")
@@ -233,17 +261,9 @@ export default function AcoesPage() {
         throw error
       }
       
-      console.log("📋 Todos os setores encontrados:", setoresData?.length || 0)
-      console.log("📋 Detalhes dos setores:", setoresData?.map(s => ({ id: s.id, nome: s.nome, pessoas: s.pessoas })))
-      
       const setoresDoUsuario = setoresData?.filter(setor => {
         const pessoasSetor = setor.pessoas || []
-        const inclui = pessoasSetor.includes(perfilId)
-        if (inclui) {
-          console.log(`✅ Usuário está no setor: ${setor.nome} (ID: ${setor.id})`)
-          console.log(`   Pessoas no setor:`, pessoasSetor)
-        }
-        return inclui
+        return pessoasSetor.includes(perfilId)
       }) || []
       
       console.log(`📊 Total de setores encontrados para o usuário: ${setoresDoUsuario.length}`)
@@ -287,19 +307,17 @@ export default function AcoesPage() {
 
   const fetchAcoes = async () => {
     try {
-      let query = supabase.from('acoes').select('*')
-      
-      if (!isAdmin) {
-        if (!userSetoresIds.length) {
-          setAcoes([])
-          return
-        }
-        query = query.in('setor_id', userSetoresIds)
-      } else if (setorSelecionado) {
-        query = query.eq('setor_id', setorSelecionado)
+      if (!userSetoresIds.length) {
+        setAcoes([])
+        return
       }
       
-      const { data: acoesData, error } = await query.order('created_at', { ascending: false })
+      const { data: acoesData, error } = await supabase
+        .from('acoes')
+        .select('*')
+        .in('setor_id', userSetoresIds)
+        .order('created_at', { ascending: false })
+      
       if (error) throw error
       setAcoes(acoesData || [])
     } catch (error) {
@@ -309,17 +327,12 @@ export default function AcoesPage() {
   }
 
   const fetchUsuariosDoSetor = async () => {
-    let setorIdParaBuscar = null
-    if (isAdmin && setorSelecionado) {
-      setorIdParaBuscar = setorSelecionado
-    } else if (!isAdmin && userSetoresIds.length > 0) {
-      setorIdParaBuscar = userSetoresIds[0]
-    }
-    
-    if (!setorIdParaBuscar) {
+    if (!userSetoresIds.length) {
       setUsuarios([])
       return
     }
+    
+    const setorIdParaBuscar = userSetoresIds[0]
     
     try {
       const { data: setorData, error: setorError } = await supabase
@@ -350,7 +363,7 @@ export default function AcoesPage() {
     }
   }
 
-  // Inicialização - CORRIGIDO COM PASSAGEM DE PARÂMETRO
+  // Inicialização
   useEffect(() => {
     const init = async () => {
       setLoading(true)
@@ -358,16 +371,13 @@ export default function AcoesPage() {
       
       console.log("🚀 Iniciando carregamento de dados...")
       
-      // 1. Primeiro, buscar o perfil do usuário (retorna o ID)
       const perfilId = await getCurrentUserPerfil()
       console.log("📌 Perfil ID obtido:", perfilId)
       
-      // 2. Carregar dados básicos
       await loadUserData()
       await fetchSetores()
       await fetchTiposAcoes()
       
-      // 3. Buscar os setores do usuário PASSANDO O ID COMO PARÂMETRO
       if (perfilId) {
         console.log("🔍 Buscando setores para o perfil ID:", perfilId)
         await findUserSetores(perfilId)
@@ -378,7 +388,6 @@ export default function AcoesPage() {
       console.log("✅ Carregamento concluído")
       setLoading(false)
       
-      // Parar a animação de pulse após 5 segundos
       setTimeout(() => {
         setAnimacaoPulse(false)
       }, 5000)
@@ -387,32 +396,13 @@ export default function AcoesPage() {
     init()
   }, [])
 
-  // DEBUG - Verificar acesso do usuário
-  useEffect(() => {
-    if (!loading && userPerfilId) {
-      console.log("=== DEBUG DO ACESSO ===")
-      console.log("User Perfil ID:", userPerfilId)
-      console.log("User Setores IDs:", userSetoresIds)
-      console.log("Setores disponíveis:", setores.map(s => ({ id: s.id, nome: s.nome, pessoas: s.pessoas })))
-      console.log("Usuário está em setores?", userSetoresIds.length > 0)
-      
-      // Verificar se o perfil está no setor EJA
-      const setorEJA = setores.find(s => s.nome === 'EJA')
-      if (setorEJA) {
-        const estaNoEJA = setorEJA.pessoas.includes(userPerfilId)
-        console.log("Está no setor EJA?", estaNoEJA)
-        console.log("IDs no setor EJA:", setorEJA.pessoas)
-      }
-    }
-  }, [loading, userPerfilId, userSetoresIds, setores])
-
   // Carregar ações e usuários quando os setores do usuário estiverem disponíveis
   useEffect(() => {
-    if (userPerfilId && ((userSetoresIds.length > 0 && !isAdmin) || isAdmin)) {
+    if (userPerfilId && userSetoresIds.length > 0) {
       fetchAcoes()
       fetchUsuariosDoSetor()
     }
-  }, [userPerfilId, userSetoresIds, isAdmin, setorSelecionado])
+  }, [userPerfilId, userSetoresIds])
 
   const resetForm = () => {
     setEditandoAcao(null)
@@ -437,8 +427,8 @@ export default function AcoesPage() {
     setSetoresSelecionados(acao.setores_envolvidos || [])
     setTipoAcaoId(acao.tipo_acao_id || '')
     setLocal(acao.local || '')
-    setDataInicio(acao.data_inicio || '')
-    setDataFim(acao.data_fim || '')
+    setDataInicio(formatarDataParaExibicao(acao.data_inicio || ''))
+    setDataFim(formatarDataParaExibicao(acao.data_fim || ''))
     setNecessitaTransporte(acao.necessita_transporte || false)
     setStatus(acao.status || 'Pendente')
     setDadosExtras(acao.dados_extras || {})
@@ -477,6 +467,16 @@ export default function AcoesPage() {
     }
 
     try {
+      const dataInicioFormatada = formatarDataParaBanco(dataInicio)
+      const dataFimFormatada = formatarDataParaBanco(dataFim)
+      
+      console.log("📅 Datas originais:")
+      console.log("  Data Início (input):", dataInicio)
+      console.log("  Data Início (formatada):", dataInicioFormatada)
+      console.log("  Data Fim (input):", dataFim)
+      console.log("  Data Fim (formatada):", dataFimFormatada)
+
+      // Dados sem o campo 'nome' que não existe na tabela
       const dados = {
         descricao,
         pessoas,
@@ -485,14 +485,16 @@ export default function AcoesPage() {
         setor_id: setorSelecionado,
         created_by: userPerfilId,
         local,
-        data_inicio: dataInicio || null,
-        data_fim: dataFim || null,
+        data_inicio: dataInicioFormatada || null,
+        data_fim: dataFimFormatada || null,
         necessita_transporte: necessitaTransporte,
         status,
         dados_extras: dadosExtras,
         updated_at: new Date().toISOString(),
         updated_by: userPerfilId
       }
+
+      console.log("📦 Dados a serem salvos:", dados)
 
       let error
       if (editandoAcao) {
@@ -512,8 +514,12 @@ export default function AcoesPage() {
         error = result.error
       }
 
-      if (error) throw error
+      if (error) {
+        console.error("❌ Erro do Supabase:", error)
+        throw error
+      }
 
+      console.log("✅ Ação salva com sucesso!")
       resetForm()
       fetchAcoes()
       fetchUsuariosDoSetor()
@@ -673,20 +679,14 @@ export default function AcoesPage() {
   }
 
   const renderSetorSelector = () => {
-    const setoresDisponiveis = !isAdmin && userSetoresIds.length > 1 
-      ? setores.filter(s => userSetoresIds.includes(s.id))
-      : isAdmin
-      ? setores
-      : !isAdmin && userSetoresIds.length === 1
-      ? setores.filter(s => userSetoresIds.includes(s.id))
-      : []
+    const setoresDisponiveis = setores.filter(s => userSetoresIds.includes(s.id))
 
     if (setoresDisponiveis.length === 0 && !editandoAcao) return null
 
     return (
       <div className={`mb-6 p-5 rounded-xl border-2 transition-all ${
         !setorConfirmado 
-          ? 'border-[#ffa301] bg-gradient-to-r from-[#ffa301]/20 to-[#ffa301]/5 shadow-lg shadow-[#ffa301]/20' 
+          ? 'border-[#ffa301] bg-linear-to-r from-[#ffa301]/20 to-[#ffa301]/5 shadow-lg shadow-[#ffa301]/20' 
           : 'border-green-200 bg-green-50'
       }`}>
         <div className="flex items-center justify-between mb-3">
@@ -725,7 +725,7 @@ export default function AcoesPage() {
             <button
               onClick={handleSetorConfirm}
               disabled={!setorSelecionado}
-              className={`w-full bg-gradient-to-r from-[#ffa301] to-[#ffa301]/80 text-[#7114dd] font-bold px-6 py-3 rounded-xl hover:from-[#ffa301] hover:to-[#ffa301] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg ${
+              className={`w-full bg-linear-to-r from-[#ffa301] to-[#ffa301]/80 text-[#7114dd] font-bold px-6 py-3 rounded-xl hover:from-[#ffa301] hover:to-[#ffa301] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg ${
                 setorSelecionado ? 'hover:scale-[1.02]' : ''
               }`}
             >
@@ -774,7 +774,7 @@ export default function AcoesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7114dd] mx-auto mb-4"></div>
           <p className="text-gray-600">Carregando dados...</p>
@@ -785,7 +785,7 @@ export default function AcoesPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-linear-to-br from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <X className="w-8 h-8 text-red-500" />
@@ -802,10 +802,10 @@ export default function AcoesPage() {
       </div>
     )
   }
-
-  if (userSetoresIds.length === 0 && !isAdmin) {
+  
+  if (userSetoresIds.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-linear-to-br from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Users className="w-8 h-8 text-red-500" />
@@ -832,7 +832,7 @@ export default function AcoesPage() {
   const setoresDoUsuario = setores.filter(s => userSetoresIds.includes(s.id))
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#7114dd]/10 to-[#a94dff]/10 p-6">
+    <div className="min-h-screen bg-linear-to-br from-[#7114dd]/10 to-[#a94dff]/10 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -843,10 +843,9 @@ export default function AcoesPage() {
               </h1>
               <p className="text-gray-500 mt-1">
                 Olá, {userNome}!
-                {!isAdmin && setoresDoUsuario.length > 0 && (
+                {setoresDoUsuario.length > 0 && (
                   <span> • Setor(es): {setoresDoUsuario.map(s => s.nome).join(', ')}</span>
                 )}
-                {isAdmin && (setorSelecionado ? setores.find(s => s.id === setorSelecionado)?.nome : 'Todos os Setores')}
               </p>
             </div>
             <button
@@ -888,7 +887,7 @@ export default function AcoesPage() {
                 <>
                   {/* Tipo de Ação */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
                       Tipo de Ação *
                     </label>
                     <select
@@ -908,7 +907,7 @@ export default function AcoesPage() {
 
                   {/* Descrição */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
                       Descrição
                     </label>
                     <textarea
@@ -923,8 +922,8 @@ export default function AcoesPage() {
                   {/* Campos Padrão */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        <MapPin size={16} className="inline mr-1" />
+                      <label className="block text-sm font-bold text-gray-700 mb-2">
+                        <MapPin size={18} className="inline mr-1" />
                         Local (Escola)
                       </label>
                       <select
@@ -940,7 +939,7 @@ export default function AcoesPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-bold text-gray-700 mb-2">
                         Status
                       </label>
                       <select
@@ -955,7 +954,7 @@ export default function AcoesPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-bold text-gray-700 mb-2">
                         <Calendar size={16} className="inline mr-1" />
                         Data de Início
                       </label>
@@ -965,10 +964,15 @@ export default function AcoesPage() {
                         onChange={(e) => setDataInicio(e.target.value)}
                         className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
                       />
+                      {dataInicio && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Horário selecionado: {new Date(dataInicio).toLocaleString('pt-BR')}
+                        </p>
+                      )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-bold text-gray-700 mb-2">
                         <Calendar size={16} className="inline mr-1" />
                         Data de Término
                       </label>
@@ -986,10 +990,10 @@ export default function AcoesPage() {
                           type="checkbox"
                           checked={necessitaTransporte}
                           onChange={(e) => setNecessitaTransporte(e.target.checked)}
-                          className="rounded"
+                          className="rounded accent-[#7114dd]"
                         />
-                        <Truck size={16} className="text-gray-500" />
-                        <span className="text-sm font-medium text-gray-700">Necessita Transporte</span>
+                        <Car size={22} className="text-[#7114dd]" />
+                        <span className="text-sm font-medium text-[#7114dd]">Necessita Transporte</span>
                       </label>
                     </div>
                   </div>
@@ -1016,7 +1020,7 @@ export default function AcoesPage() {
 
                   {/* Setores Envolvidos */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
                       <Building2 size={16} className="inline mr-1" />
                       Setores Envolvidos
                     </label>
@@ -1040,7 +1044,7 @@ export default function AcoesPage() {
 
                   {/* Pessoas Envolvidas */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
                       <Users size={16} className="inline mr-1" />
                       Pessoas Envolvidas
                     </label>
@@ -1115,7 +1119,7 @@ export default function AcoesPage() {
           </div>
         )}
 
-        {/* Lista de Ações - só aparece quando mostrarListaAcoes é true */}
+        {/* Lista de Ações */}
         {mostrarListaAcoes && acoes.length > 0 && (
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -1129,14 +1133,17 @@ export default function AcoesPage() {
               {acoes.map((acao) => {
                 const setorDaAcao = setores.find(s => s.id === acao.setor_id)
                 const setoresEnvolvidos = setores.filter(s => acao.setores_envolvidos?.includes(s.id))
+                const tipoAcao = tiposAcoes.find(t => t.id === acao.tipo_acao_id)
                 
                 return (
                   <div key={acao.id} className="border rounded-xl p-5 hover:shadow-md transition bg-white">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        {/* Cabeçalho */}
+                        {/* Cabeçalho - usando tipo de ação + data em vez de nome */}
                         <div className="flex items-center gap-2 mb-3 flex-wrap">
-                          <h3 className="font-bold text-lg text-gray-800">{acao.nome}</h3>
+                          <h3 className="font-bold text-lg text-gray-800">
+                            {getTipoAcaoNome(acao.tipo_acao_id)} - {new Date(acao.created_at).toLocaleDateString('pt-BR')}
+                          </h3>
                           <span className="text-xs bg-[#7114dd]/10 text-[#7114dd] px-2 py-1 rounded-full">
                             {getTipoAcaoNome(acao.tipo_acao_id)}
                           </span>
