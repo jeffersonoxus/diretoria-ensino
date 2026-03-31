@@ -74,11 +74,27 @@ interface TipoAcao {
 
 // Opções estáticas
 const ESCOLAS_OPCOES = [
-  "Escola Municipal Almira Manso",
-  "Escola Estadual Rubens Canuto",
-  "Centro de Educação Integral - Maceió",
-  "Escola Municipal Dr. José Maria de Melo",
-  "Escola Técnica Estadual de Alagoas (Rio Largo)"
+  "EMEB Dalmario Souza",
+  "EMEB Dr. Gustavo Paiva",
+  "EMEB João Paulo II",
+  "EMEB José Bonifácio de Andrada e Silva",
+  "EMEB Lápis de Cor",
+  "EMEB Marieta Leão",
+  "EMEB Professor Givaldo Moraes Sarmento",
+  "EMEB Professor José Carlos da Silva",
+  "EMEB Professor Pompeu Sarmento",
+  "EMEB Professora Iete Melo Mathias",
+  "EMEB Renato Jarsen de Melo",
+  "EMEB Teresa Cristina Lins de Souza Costa",
+  "EMEF Industrial Luigi Bauducco",
+  "EMEF Machado de Assis",
+  "EMEF Manoel Soares de Souza",
+  "EMEF Prefeito Antonio Lins de Souza",
+  "EMEF Professor José Edmilson de Souza",
+  "EMEF Professora Emilia Milones",
+  "Escola Municipal de Ensino Fundamental Dr. Gastão Oiticica",
+  "Escola Municipal de Ensino Fundamental Manoel Gonçalves da Silva",
+  "Escola Municipal de Ensino Fundamental Odylo Alvares de Souza"
 ]
 
 const STATUS_OPCOES = [

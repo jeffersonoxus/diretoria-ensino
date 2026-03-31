@@ -105,6 +105,7 @@ export const Sidebar = () => {
     { href: '/dien', icon: Home, label: 'Dashboard', show: true },
     { href: '/dien/perfil', icon: User, label: 'Meu Perfil', show: true },
     { href: '/dien/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
+    { href: '/dien/avaliacoes_diagnosticas', icon: ClipboardCheck, label: 'Avaliações Diagnósticas', show: true },
     { href: '/app', icon: Smartphone, label: 'App Mobile', show: temSetor, external: true },
   ];
 
@@ -157,10 +158,10 @@ export const Sidebar = () => {
       >
         <div className="flex flex-col h-full">
           {/* Header com logo e botão fechar */}
-          <div className="p-5 border-b bg-gradient-to-r from-[#7114dd]/5 to-[#a94dff]/5">
+          <div className="p-5 border-b bg-linear-to-r from-[#7114dd]/5 to-[#a94dff]/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-10 h-10 bg-gradient-to-br from-[#7114dd] to-[#a94dff] rounded-xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-linear-to-br from-[#7114dd] to-[#a94dff] rounded-xl flex items-center justify-center">
                   <GraduationCap className="w-6 h-6 text-white" />
                 </div>
                 <div>
@@ -184,7 +185,7 @@ export const Sidebar = () => {
           <div className="p-5 border-b bg-gray-50">
             <div className="flex items-center space-x-3">
               {/* Avatar com iniciais */}
-              <div className="w-12 h-12 bg-gradient-to-br from-[#7114dd] to-[#a94dff] rounded-full flex items-center justify-center shrink-0 shadow-md">
+              <div className="w-12 h-12 bg-linear-to-br from-[#7114dd] to-[#a94dff] rounded-full flex items-center justify-center shrink-0 shadow-md">
                 {user?.user_metadata?.avatar_url ? (
                   <img 
                     src={user.user_metadata.avatar_url} 
