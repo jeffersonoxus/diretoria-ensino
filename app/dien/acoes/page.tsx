@@ -105,7 +105,9 @@ const STATUS_OPCOES = [
   'Reagendada'
 ]
 
-// Função para formatar data local para string ISO mantendo o horário local
+// --- Funções de data com fuso horário local corrigido ---
+
+// Converter data local para UTC ao salvar no banco
 const formatarDataParaBanco = (dataLocal: string): string => {
   if (!dataLocal) return ''
   
@@ -113,30 +115,115 @@ const formatarDataParaBanco = (dataLocal: string): string => {
   const [ano, mes, dia] = datePart.split('-')
   const [horas, minutos] = timePart.split(':')
   
-  return `${ano}-${mes}-${dia} ${horas}:${minutos}:00`
+  // Criar objeto Date no fuso local
+  const dataLocalObj = new Date(
+    parseInt(ano), 
+    parseInt(mes) - 1, 
+    parseInt(dia), 
+    parseInt(horas), 
+    parseInt(minutos)
+  )
+  
+  // Converter para ISO string (UTC) para salvar no banco
+  return dataLocalObj.toISOString()
 }
 
-// Função para converter data do banco para exibição no input datetime-local
-const formatarDataParaExibicao = (dataBanco: string): string => {
-  if (!dataBanco) return ''
+// Converter data UTC do banco para exibição local no input
+const formatarDataParaExibicao = (dataUTC: string): string => {
+  if (!dataUTC) return ''
   
-  let dataStr = dataBanco
-  if (dataStr.includes('+')) {
-    dataStr = dataStr.split('+')[0]
-  }
-  if (dataStr.includes('.')) {
-    dataStr = dataStr.split('.')[0]
-  }
+  const dataObj = new Date(dataUTC)
   
-  if (dataStr.includes('T')) {
-    const [datePart, timePart] = dataStr.split('T')
-    const [horas, minutos] = timePart.split(':')
-    return `${datePart}T${horas}:${minutos}`
-  }
+  const ano = dataObj.getFullYear()
+  const mes = String(dataObj.getMonth() + 1).padStart(2, '0')
+  const dia = String(dataObj.getDate()).padStart(2, '0')
+  const horas = String(dataObj.getHours()).padStart(2, '0')
+  const minutos = String(dataObj.getMinutes()).padStart(2, '0')
   
-  const [datePart, timePart] = dataStr.split(' ')
-  const [horas, minutos] = timePart.split(':')
-  return `${datePart}T${horas}:${minutos}`
+  return `${ano}-${mes}-${dia}T${horas}:${minutos}`
+}
+
+// Para exibir nas listas (já no horário local)
+const formatarDataParaExibicaoLista = (dataUTC: string): string => {
+  if (!dataUTC) return ''
+  const dataObj = new Date(dataUTC)
+  return dataObj.toLocaleString('pt-BR')
+}
+
+// Componente de input com minutos limitados a 0 e 30
+const DateTimeLocalInput = ({ 
+  value, 
+  onChange, 
+  label,
+  required = false
+}: { 
+  value: string, 
+  onChange: (value: string) => void, 
+  label: string,
+  required?: boolean
+}) => {
+  const [dateValue, setDateValue] = useState('')
+  const [timeValue, setTimeValue] = useState('')
+
+  useEffect(() => {
+    if (value) {
+      const [datePart, timePart] = value.split('T')
+      setDateValue(datePart || '')
+      if (timePart) {
+        const [hours, minutes] = timePart.split(':')
+        // Arredondar para 0 ou 30 minutos
+        const roundedMinutes = parseInt(minutes) < 15 ? '00' : '30'
+        setTimeValue(`${hours}:${roundedMinutes}`)
+      }
+    }
+  }, [value])
+
+  const handleDateTimeChange = (date: string, time: string) => {
+    if (date && time) {
+      onChange(`${date}T${time}`)
+    } else if (date) {
+      onChange(`${date}T00:00`)
+    } else {
+      onChange('')
+    }
+  }
+
+  // Gerar opções de horário (00:00, 00:30, 01:00, 01:30, ..., 23:00, 23:30)
+  const timeOptions = []
+  for (let hora = 0; hora < 24; hora++) {
+    const horaStr = String(hora).padStart(2, '0')
+    timeOptions.push({ hora: horaStr, minuto: '00', label: `${horaStr}:00` })
+    timeOptions.push({ hora: horaStr, minuto: '30', label: `${horaStr}:30` })
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-bold text-gray-700">
+        {label} {required && '*'}
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          type="date"
+          value={dateValue}
+          onChange={(e) => handleDateTimeChange(e.target.value, timeValue)}
+          className="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
+          required={required}
+        />
+        <select
+          value={timeValue}
+          onChange={(e) => handleDateTimeChange(dateValue, e.target.value)}
+          className="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
+        >
+          <option value="">Selecione horário</option>
+          {timeOptions.map(({ hora, minuto, label }) => (
+            <option key={`${hora}:${minuto}`} value={`${hora}:${minuto}`}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  )
 }
 
 export default function AcoesPage() {
@@ -483,16 +570,16 @@ export default function AcoesPage() {
     }
 
     try {
+      // Converter datas para UTC antes de salvar
       const dataInicioFormatada = formatarDataParaBanco(dataInicio)
       const dataFimFormatada = formatarDataParaBanco(dataFim)
       
-      console.log("📅 Datas originais:")
-      console.log("  Data Início (input):", dataInicio)
-      console.log("  Data Início (formatada):", dataInicioFormatada)
-      console.log("  Data Fim (input):", dataFim)
-      console.log("  Data Fim (formatada):", dataFimFormatada)
+      console.log("📅 Datas:")
+      console.log("  Data Início (local input):", dataInicio)
+      console.log("  Data Início (UTC para banco):", dataInicioFormatada)
+      console.log("  Data Fim (local input):", dataFim)
+      console.log("  Data Fim (UTC para banco):", dataFimFormatada)
 
-      // Dados sem o campo 'nome' que não existe na tabela
       const dados = {
         descricao,
         pessoas,
@@ -719,7 +806,7 @@ export default function AcoesPage() {
         
         {!setorConfirmado ? (
           <>
-            <div className="relative">
+            <div className="relative text-slate-700">
               <select
                 value={setorSelecionado || ''}
                 onChange={(e) => setSetorSelecionado(e.target.value)}
@@ -848,7 +935,7 @@ export default function AcoesPage() {
   const setoresDoUsuario = setores.filter(s => userSetoresIds.includes(s.id))
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-[#7114dd]/10 to-[#a94dff]/10 p-6">
+    <div className="min-h-screen text-slate-700 bg-linear-to-br from-[#7114dd]/10 to-[#a94dff]/10 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -902,7 +989,7 @@ export default function AcoesPage() {
               {setorConfirmado && (
                 <>
                   {/* Tipo de Ação */}
-                  <div>
+                  <div className="text-slate-700">
                     <label className="block text-sm font-bold text-gray-700 mb-2">
                       Tipo de Ação *
                     </label>
@@ -969,36 +1056,18 @@ export default function AcoesPage() {
                       </select>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">
-                        <Calendar size={16} className="inline mr-1" />
-                        Data de Início
-                      </label>
-                      <input
-                        type="datetime-local"
-                        value={dataInicio}
-                        onChange={(e) => setDataInicio(e.target.value)}
-                        className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
-                      />
-                      {dataInicio && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Horário selecionado: {new Date(dataInicio).toLocaleString('pt-BR')}
-                        </p>
-                      )}
-                    </div>
+                    {/* Campos de data com minutos restritos */}
+                    <DateTimeLocalInput
+                      value={dataInicio}
+                      onChange={setDataInicio}
+                      label="Data de Início"
+                    />
 
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">
-                        <Calendar size={16} className="inline mr-1" />
-                        Data de Término
-                      </label>
-                      <input
-                        type="datetime-local"
-                        value={dataFim}
-                        onChange={(e) => setDataFim(e.target.value)}
-                        className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
-                      />
-                    </div>
+                    <DateTimeLocalInput
+                      value={dataFim}
+                      onChange={setDataFim}
+                      label="Data de Término"
+                    />
 
                     <div className="flex items-center">
                       <label className="flex items-center gap-2 cursor-pointer">
@@ -1155,7 +1224,7 @@ export default function AcoesPage() {
                   <div key={acao.id} className="border rounded-xl p-5 hover:shadow-md transition bg-white">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        {/* Cabeçalho - usando tipo de ação + data em vez de nome */}
+                        {/* Cabeçalho */}
                         <div className="flex items-center gap-2 mb-3 flex-wrap">
                           <h3 className="font-bold text-lg text-gray-800">
                             {getTipoAcaoNome(acao.tipo_acao_id)} - {new Date(acao.created_at).toLocaleDateString('pt-BR')}
@@ -1178,7 +1247,7 @@ export default function AcoesPage() {
                           <p className="text-gray-600 mb-3">{acao.descricao}</p>
                         )}
                         
-                        {/* Local e Datas */}
+                        {/* Local e Datas - usando formatação local */}
                         <div className="flex flex-wrap gap-4 mb-3 text-sm text-gray-500">
                           {acao.local && (
                             <span className="flex items-center gap-1">
@@ -1188,13 +1257,13 @@ export default function AcoesPage() {
                           {acao.data_inicio && (
                             <span className="flex items-center gap-1">
                               <Calendar size={14} /> 
-                              Início: {new Date(acao.data_inicio).toLocaleString('pt-BR')}
+                              Início: {formatarDataParaExibicaoLista(acao.data_inicio)}
                             </span>
                           )}
                           {acao.data_fim && (
                             <span className="flex items-center gap-1">
                               <Calendar size={14} /> 
-                              Término: {new Date(acao.data_fim).toLocaleString('pt-BR')}
+                              Término: {formatarDataParaExibicaoLista(acao.data_fim)}
                             </span>
                           )}
                           {acao.necessita_transporte && (

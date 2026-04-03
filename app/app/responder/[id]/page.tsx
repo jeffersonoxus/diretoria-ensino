@@ -133,7 +133,7 @@ export default function ResponderAcaoPage() {
               placeholder="Digite sua resposta..."
               value={valor}
               onChange={(e) => atualizarValor(e.target.value)}
-              className="w-full p-4 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition text-base"
+              className="w-full p-4 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition text-base"
             />
           </div>
         )
@@ -149,12 +149,13 @@ export default function ResponderAcaoPage() {
               placeholder="Digite um número..."
               value={valor}
               onChange={(e) => atualizarValor(e.target.value)}
-              className="w-full p-4 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition text-base"
+              className="w-full p-4 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition text-base"
             />
           </div>
         )
       
       case 'boolean':
+        const valorReal = respostas[param.label];
         return (
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -176,7 +177,7 @@ export default function ResponderAcaoPage() {
                 type="button"
                 onClick={() => atualizarValor(false)}
                 className={`flex-1 py-3 px-4 rounded-xl font-medium transition ${
-                  valor === false 
+                  valorReal === false 
                     ? 'bg-red-500 text-white shadow-md' 
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
@@ -196,7 +197,7 @@ export default function ResponderAcaoPage() {
             <select
               value={valor}
               onChange={(e) => atualizarValor(e.target.value)}
-              className="w-full p-4 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition text-base bg-white"
+              className="w-full p-4 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition text-base bg-white"
             >
               <option value="">Selecione uma opção...</option>
               {param.opcoes?.map(op => (
@@ -226,7 +227,7 @@ export default function ResponderAcaoPage() {
                         atualizarValor(valoresSelecionados.filter(v => v !== op))
                       }
                     }}
-                    className="w-5 h-5 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                    className="w-5 h-5 rounded border-gray-300 text-purple-500 focus:ring-purple-500"
                   />
                   <span className="text-base">{op}</span>
                 </label>
@@ -282,9 +283,9 @@ export default function ResponderAcaoPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-orange-50 to-amber-50 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-b from-purple-50 to-purple-200 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Carregando ação...</p>
         </div>
       </div>
@@ -293,14 +294,14 @@ export default function ResponderAcaoPage() {
 
   if (error || !acao) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-orange-50 to-amber-50 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-linear-to-b from-purple-50 to-purple-200 flex items-center justify-center p-6">
         <div className="bg-white rounded-3xl shadow-xl p-8 max-w-md text-center">
           <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Erro ao carregar ação</h2>
           <p className="text-gray-600 mb-4">{error || 'Ação não encontrada'}</p>
           <button
             onClick={() => router.push('/app')}
-            className="bg-orange-500 text-white px-6 py-3 rounded-xl hover:bg-orange-600 transition"
+            className="bg-purple-500 text-white px-6 py-3 rounded-xl hover:bg-purple-600 transition"
           >
             Voltar para início
           </button>
@@ -314,7 +315,7 @@ export default function ResponderAcaoPage() {
   
   if (jaRealizada) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-orange-50 to-amber-50 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-linear-to-b from-purple-50 to-purple-200 flex items-center justify-center p-6">
         <div className="bg-white rounded-3xl shadow-xl p-8 max-w-md text-center">
           <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Ação já registrada</h2>
@@ -323,7 +324,7 @@ export default function ResponderAcaoPage() {
           </p>
           <button
             onClick={() => router.push('/app')}
-            className="bg-orange-500 text-white px-6 py-3 rounded-xl hover:bg-orange-600 transition"
+            className="bg-purple-500 text-white px-6 py-3 rounded-xl hover:bg-purple-600 transition"
           >
             Ver outras ações
           </button>
@@ -340,7 +341,7 @@ export default function ResponderAcaoPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-orange-50 to-amber-50">
+    <div className="min-h-screen text-slate-700 bg-linear-to-b from-purple-50 to-purple-200">
       {/* Header */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 py-4">
@@ -360,7 +361,7 @@ export default function ResponderAcaoPage() {
       </div>
 
       {/* Steps */}
-      <div className="bg-white border-b border-gray-100">
+      <div className="bg-white text-slate-700 border-b border-gray-100">
         <div className="max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between gap-2">
             {steps.map((step, index) => {
@@ -371,7 +372,7 @@ export default function ResponderAcaoPage() {
                 <div key={index} className="flex-1 flex items-center gap-2">
                   <div className={`
                     w-8 h-8 rounded-full flex items-center justify-center transition
-                    ${isActive ? 'bg-orange-500 text-white' : ''}
+                    ${isActive ? 'bg-purple-500 text-white' : ''}
                     ${isCompleted ? 'bg-green-500 text-white' : ''}
                     ${!isActive && !isCompleted ? 'bg-gray-200 text-gray-500' : ''}
                   `}>
@@ -379,7 +380,7 @@ export default function ResponderAcaoPage() {
                   </div>
                   <span className={`
                     text-xs font-medium hidden sm:block
-                    ${isActive ? 'text-orange-600' : ''}
+                    ${isActive ? 'text-purple-600' : ''}
                     ${isCompleted ? 'text-green-600' : ''}
                     ${!isActive && !isCompleted ? 'text-gray-400' : ''}
                   `}>
@@ -427,7 +428,7 @@ export default function ResponderAcaoPage() {
                   </div>
                 )}
                 {acao.necessita_transporte && (
-                  <div className="flex items-center gap-3 text-amber-600">
+                  <div className="flex items-center gap-3 text-purple-600">
                     <Truck size={20} />
                     <span className="font-medium">Necessita transporte</span>
                   </div>
@@ -452,7 +453,7 @@ export default function ResponderAcaoPage() {
 
             <button
               onClick={() => setCurrentStep(1)}
-              className="w-full bg-orange-500 text-white py-4 rounded-2xl font-bold text-lg shadow-md hover:bg-orange-600 transition active:scale-98"
+              className="w-full bg-purple-500 text-white py-4 rounded-2xl font-bold text-lg shadow-md hover:bg-purple-600 transition active:scale-98"
             >
               Continuar
             </button>
@@ -487,7 +488,7 @@ export default function ResponderAcaoPage() {
                     value={observacoes}
                     onChange={(e) => setObservacoes(e.target.value)}
                     rows={4}
-                    className="w-full p-4 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition text-base"
+                    className="w-full p-4 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition text-base"
                   />
                 </div>
               </div>
@@ -502,7 +503,7 @@ export default function ResponderAcaoPage() {
               </button>
               <button
                 onClick={() => setCurrentStep(2)}
-                className="flex-1 bg-orange-500 text-white py-4 rounded-2xl font-bold hover:bg-orange-600 transition active:scale-98"
+                className="flex-1 bg-purple-500 text-white py-4 rounded-2xl font-bold hover:bg-purple-600 transition active:scale-98"
               >
                 Próximo
               </button>

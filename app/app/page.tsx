@@ -166,7 +166,7 @@ export default function AppMobilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-b from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="animate-spin h-12 w-12 text-[#7114dd] mx-auto mb-4" />
           <p className="text-gray-600">Carregando ações...</p>
@@ -177,7 +177,7 @@ export default function AppMobilePage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-linear-to-b from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center p-6">
         <div className="bg-white rounded-3xl shadow-xl p-8 max-w-md text-center">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Erro ao carregar</h2>
@@ -195,7 +195,7 @@ export default function AppMobilePage() {
 
   if (userSetores.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-linear-to-b from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center p-6">
         <div className="bg-white rounded-3xl shadow-xl p-8 max-w-md text-center">
           <Building2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Acesso Restrito</h2>
@@ -219,7 +219,7 @@ export default function AppMobilePage() {
   const pendentesCount = acoes.filter(a => a.status === 'Pendente' || a.status === 'Reagendada').length
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#7114dd]/10 to-[#a94dff]/10 pb-24">
+    <div className="min-h-screen bg-purple-100 text-slate-700 pb-24">
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-4 py-6 sticky top-0 z-10 shadow-sm">
         <div>

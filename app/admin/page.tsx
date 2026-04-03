@@ -138,7 +138,7 @@ export default function AdminPage() {
   )
 
   return (
-    <div className="min-h-screen p-4 md:p-8 bg-gradient-to-br from-[#7114dd]/10 to-[#a94dff]/10 text-slate-800 font-sans">
+    <div className="min-h-screen p-4 md:p-8 bg-linear-to-br from-purple-100 to-purple-200 text-slate-800 font-sans">
       <header className="mb-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>

@@ -51,7 +51,7 @@ export default function PerfilPage() {
   if (!user) return null
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl text-slate-700 mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6 md:hidden">
         Meu Perfil
       </h1>
