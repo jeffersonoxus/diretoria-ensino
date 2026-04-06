@@ -1,4 +1,3 @@
-// app/dien/acoes/page.tsx
 'use client'
 
 import { useState, useEffect } from "react"
@@ -256,6 +255,7 @@ export default function AcoesPage() {
   const [necessitaTransporte, setNecessitaTransporte] = useState(false)
   const [status, setStatus] = useState('Pendente')
   const [dadosExtras, setDadosExtras] = useState<Record<string, any>>({})
+  const [observacoes, setObservacoes] = useState('')
 
   // Buscar perfil do usuário atual
   const getCurrentUserPerfil = async (): Promise<string | null> => {
@@ -519,6 +519,7 @@ export default function AcoesPage() {
     setNecessitaTransporte(false)
     setStatus('Pendente')
     setDadosExtras({})
+    setObservacoes('')
     setSetorSelecionado(null)
     setSetorConfirmado(false)
   }
@@ -535,6 +536,7 @@ export default function AcoesPage() {
     setNecessitaTransporte(acao.necessita_transporte || false)
     setStatus(acao.status || 'Pendente')
     setDadosExtras(acao.dados_extras || {})
+    setObservacoes(acao.observacoes || '')
     setSetorSelecionado(acao.setor_id || null)
     setSetorConfirmado(true)
     setFormExpandido(true)
@@ -593,6 +595,7 @@ export default function AcoesPage() {
         necessita_transporte: necessitaTransporte,
         status,
         dados_extras: dadosExtras,
+        observacoes: observacoes,
         updated_at: new Date().toISOString(),
         updated_by: userPerfilId
       }
@@ -1152,6 +1155,24 @@ export default function AcoesPage() {
                         <p className="text-gray-500 text-sm">Nenhuma pessoa encontrada neste setor</p>
                       )}
                     </div>
+                  </div>
+
+                  {/* Observações */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      <AlertCircle size={16} className="inline mr-1" />
+                      Observações
+                    </label>
+                    <textarea
+                      placeholder="Observações adicionais sobre a ação..."
+                      value={observacoes}
+                      onChange={(e) => setObservacoes(e.target.value)}
+                      rows={3}
+                      className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      Informações complementares, pendências, alertas, etc.
+                    </p>
                   </div>
 
                   {/* Botões */}

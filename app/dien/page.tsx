@@ -9,8 +9,10 @@ import {
   TrendingUp, 
   Users, 
   Building2, 
-  Truck, 
-  Star, 
+  Sunrise, 
+  Sun,
+  Moon,
+  MoonStar, 
   Package,
   Filter,
   X,
@@ -407,13 +409,18 @@ export default function DashboardPage() {
     if (!printContent) return
     
     const originalTitle = document.title
-    const tipoAcaoNome = tipoAcaoRelatorio ? tiposAcoes.find(t => t.id === tipoAcaoRelatorio)?.nome : ''
-    const setorNome = setorRelatorio ? setores.find(s => s.id === setorRelatorio)?.nome : ''
     
     document.title = `Relatório de Ações - ${new Date().toLocaleDateString('pt-BR')}`
     
+    // Pega a URL base da aplicação
+    const baseUrl = window.location.origin
+    
     const printWindow = window.open('', '_blank')
     if (printWindow) {
+      // Substituir URLs relativas por absolutas no conteúdo
+      let htmlContent = printContent.innerHTML
+      htmlContent = htmlContent.replace(/src="\/(?!\/)/g, `src="${baseUrl}/`)
+      
       printWindow.document.write(`
         <!DOCTYPE html>
         <html>
@@ -429,9 +436,8 @@ export default function DashboardPage() {
               }
               .header {
                 text-align: center;
-                margin-bottom: 30px;
-                border-bottom: 2px solid #7114dd;
-                padding-bottom: 10px;
+                margin-bottom: 4px;
+                padding-bottom: 4px;
               }
               .header h1 {
                 color: #7114dd;
@@ -441,6 +447,27 @@ export default function DashboardPage() {
               .header p {
                 margin: 5px 0;
                 color: #666;
+              }
+              .logo-container {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+                border-bottom: 2px solid #7114dd;
+              }
+              .logo-left, .logo-right {
+                flex: 1;
+              }
+              .logo-left img, .logo-right img {
+                max-width: 80px;
+                height: auto;
+              }
+              .logo-left {
+                text-align: left;
+              }
+              .logo-right {
+                text-align: right;
+                padding-right: 20px;
               }
               table {
                 width: 100%;
@@ -489,7 +516,7 @@ export default function DashboardPage() {
             </style>
           </head>
           <body>
-            ${printContent.innerHTML}
+            ${htmlContent}
           </body>
         </html>
       `)
@@ -702,7 +729,7 @@ export default function DashboardPage() {
 
       {/* Modal de Impressão/Relatório */}
       {mostrarImpressao && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/10 backdrop-blur-[1px] bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-white z-10">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -884,24 +911,36 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Conteúdo para impressão (oculto na tela) */}
+      {/* Conteúdo para impressão (oculto na tela) - COM LOGOS */}
       <div ref={printRef} className="hidden">
-        <div className="header">
-          <h1>Relatório de Ações</h1>
-          <p>Data de emissão: {new Date().toLocaleString('pt-BR')}</p>
-          {tipoRelatorio === 'porSetor' && setorRelatorio && (
-            <p>Setor: {setores.find(s => s.id === setorRelatorio)?.nome}</p>
-          )}
-          {tipoRelatorio === 'porAcao' && tipoAcaoRelatorio && (
-            <p>Tipo de Ação: {tiposAcoes.find(t => t.id === tipoAcaoRelatorio)?.nome}</p>
-          )}
-          {tipoRelatorio === 'porSetorEAcao' && setorRelatorio && tipoAcaoRelatorio && (
-            <p>Setor: {setores.find(s => s.id === setorRelatorio)?.nome} | Tipo: {tiposAcoes.find(t => t.id === tipoAcaoRelatorio)?.nome}</p>
-          )}
-          {incluirPeriodo && dataInicioRelatorio && dataFimRelatorio && (
-            <p>Período: {new Date(dataInicioRelatorio).toLocaleDateString('pt-BR')} a {new Date(dataFimRelatorio).toLocaleDateString('pt-BR')}</p>
-          )}
+        <div className="logo-container items-center" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div className="logo-left">
+            <img src="/logos/logoSemed.png" alt="Logo SEMED" style={{ maxWidth: '200px', height: 'auto' }} />
+          </div>
+
+          <div className="header">
+            <h1>Relatório de Ações</h1>
+            <p>Data de emissão: {new Date().toLocaleString('pt-BR')}</p>
+            {tipoRelatorio === 'porSetor' && setorRelatorio && (
+              <p>Setor: {setores.find(s => s.id === setorRelatorio)?.nome}</p>
+            )}
+            {tipoRelatorio === 'porAcao' && tipoAcaoRelatorio && (
+              <p>Tipo de Ação: {tiposAcoes.find(t => t.id === tipoAcaoRelatorio)?.nome}</p>
+            )}
+            {tipoRelatorio === 'porSetorEAcao' && setorRelatorio && tipoAcaoRelatorio && (
+              <p>Setor: {setores.find(s => s.id === setorRelatorio)?.nome} | Tipo: {tiposAcoes.find(t => t.id === tipoAcaoRelatorio)?.nome}</p>
+            )}
+            {incluirPeriodo && dataInicioRelatorio && dataFimRelatorio && (
+              <p>Período: {new Date(dataInicioRelatorio).toLocaleDateString('pt-BR')} a {new Date(dataFimRelatorio).toLocaleDateString('pt-BR')}</p>
+            )}
+          </div>
+
+          <div className="logo-right">
+            <img src="/logos/logoDien.png" alt="Logo" style={{ maxWidth: '50px', height: 'auto' }} />
+          </div>
         </div>
+        
+        
         
         <table>
           <thead>
@@ -1084,28 +1123,28 @@ export default function DashboardPage() {
 
       {/* Cards Resumo */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-[#7114dd]">
+        <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-black">
           <div className="flex items-center justify-between">
-            <div><p className="text-gray-500 text-sm">Total de Ações</p><p className="text-3xl font-bold text-gray-800">{acoesFiltradas.length}</p></div>
-            <Calendar size={32} className="text-[#7114dd] opacity-50" />
+            <div><p className="text-gray-700 font-bold text-sm">Total de Ações</p><p className="text-3xl font-bold text-gray-800">{acoesFiltradas.length}</p></div>
+            <Calendar size={32} className="text-black opacity-50" />
           </div>
         </div>
         <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-green-500">
           <div className="flex items-center justify-between">
-            <div><p className="text-gray-500 text-sm">Ações Realizadas</p><p className="text-3xl font-bold text-green-600">{acoesFiltradas.filter(a => a.status === 'Realizada' || a.status === 'Realizada Parcialmente').length}</p></div>
-            <CheckCircle size={32} className="text-green-500 opacity-50" />
+            <div><p className="text-gray-700 font-bold text-sm">Ações Realizadas</p><p className="text-3xl font-bold text-green-600">{acoesFiltradas.filter(a => a.status === 'Realizada' || a.status === 'Realizada Parcialmente').length}</p></div>
+            <CheckCircle size={32} className="text-green-500" />
           </div>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-yellow-500">
+        <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-yellow-400">
           <div className="flex items-center justify-between">
-            <div><p className="text-gray-500 text-sm">Ações Pendentes</p><p className="text-3xl font-bold text-yellow-600">{acoesFiltradas.filter(a => a.status === 'Pendente' || a.status === 'Reagendada').length}</p></div>
-            <AlertCircle size={32} className="text-yellow-500 opacity-50" />
+            <div><p className="text-gray-700 font-bold text-sm">Ações Pendentes</p><p className="text-3xl font-bold text-yellow-400">{acoesFiltradas.filter(a => a.status === 'Pendente' || a.status === 'Reagendada').length}</p></div>
+            <AlertCircle size={32} className="text-yellow-400" />
           </div>
         </div>
         <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-blue-500">
           <div className="flex items-center justify-between">
-            <div><p className="text-gray-500 text-sm">Ações com Transporte</p><p className="text-3xl font-bold text-blue-600">{acoesComTransporte.length}</p></div>
-            <Car size={32} className="text-blue-500 opacity-50" />
+            <div><p className="text-gray-700 font-bold text-sm">Ações com Transporte</p><p className="text-3xl font-bold text-blue-600">{acoesComTransporte.length}</p></div>
+            <Car size={32} className="text-blue-500" />
           </div>
         </div>
       </div>
@@ -1117,7 +1156,7 @@ export default function DashboardPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-semibold text-gray-800 flex items-center gap-2">
-                <Calendar size={20} className="text-indigo-600" />
+                <Calendar size={20} className="text-purple-700" />
                 Agenda Semanal
               </h2>
               <p className="text-xs text-gray-500 mt-1">
@@ -1182,10 +1221,12 @@ export default function DashboardPage() {
                   {/* Coluna do turno */}
                   <div className={`p-3 flex items-center justify-center gap-2 text-sm font-medium border-b border-gray-200 ${bgColor}`}>
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                      turno === 'Manhã' ? 'bg-amber-100 text-amber-600' :
+                      turno === 'Manhã' ? 'bg-blue-100 text-blue-600' :
                       turno === 'Tarde' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600'
                     }`}>
-                      <Clock size={14} />
+                      {turno === 'Manhã' && <Sun size={24} strokeWidth={2.5}/>}
+                      {turno === 'Tarde' && <Sun size={24} strokeWidth={2.5}/>}
+                      {turno === 'Noite' && <Moon size={24} strokeWidth={2.5}/>}
                     </div>
                     <span className="text-gray-700">{turno}</span>
                   </div>
@@ -1226,7 +1267,7 @@ export default function DashboardPage() {
                                   onClick={() => {
                                     // Modal de detalhes
                                     const modal = document.createElement('div')
-                                    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4'
+                                    modal.className = 'fixed inset-0 bg-black/10 backdrop-blur-[1px] bg-opacity-50 flex items-center justify-center z-50 p-4'
                                     modal.innerHTML = `
                                       <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                                         <div class="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
@@ -1241,7 +1282,7 @@ export default function DashboardPage() {
                                             </div>
                                             <div>
                                               <label class="text-xs text-gray-400 uppercase">Status</label>
-                                              <p class="inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                                              <p class="inline-flex px-4 py-2 rounded-full text-xs font-bold ${
                                                 acao.status === 'Realizada' ? 'bg-green-100 text-green-700' :
                                                 acao.status === 'Realizada Parcialmente' ? 'bg-blue-100 text-blue-700' :
                                                 acao.status === 'Cancelada' ? 'bg-red-100 text-red-700' :
@@ -1270,11 +1311,11 @@ export default function DashboardPage() {
                                             </div>
                                             <div class="col-span-2">
                                               <label class="text-xs text-gray-400 uppercase">Descrição</label>
-                                              <div class="mt-1 p-3 bg-gray-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">${(acaoOriginal?.descricao || 'Sem descrição').replace(/\n/g, '<br>')}</div>
+                                              <div class="mt-1 p-3 bg-gray-50 border border-slate-300 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">${(acaoOriginal?.descricao || 'Sem descrição').replace(/\n/g, '<br>')}</div>
                                             </div>
                                             <div class="col-span-2">
                                               <label class="text-xs text-gray-400 uppercase">Observações</label>
-                                              <div class="mt-1 p-3 bg-gray-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">${(acaoOriginal?.observacoes || 'Sem observações').replace(/\n/g, '<br>')}</div>
+                                              <div class="mt-1 p-3 bg-gray-50 border border-slate-300 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">${(acaoOriginal?.observacoes || 'Sem observações').replace(/\n/g, '<br>')}</div>
                                             </div>
                                           </div>
                                         </div>
@@ -1287,36 +1328,39 @@ export default function DashboardPage() {
                                   className={`rounded-md p-2 text-xs border-l-4 ${borderColor} bg-white shadow-sm hover:shadow-md transition-all cursor-pointer group hover:scale-[1.02]`}
                                 >
                                   <div className="flex items-center justify-between mb-1.5">
-                                    <div className="flex items-center gap-1">
-                                      <Clock size={10} className="text-gray-400" />
+                                    <div className="flex flex-1 items-center justify-between gap-1 text-gray-400">
+                                      <Clock size={10} className="text-gray-700" />
                                       <span className="text-[10px] font-mono font-medium text-gray-600">{acao.horario}</span>
+                                      {acao.status === 'Pendente' && <span className="ml-auto text-amber-500 font-bold">Pendente</span>}
+                                      {acao.status === 'Realizada' && <span className="ml-auto text-green-500 font-bold">Realizada</span>}
+                                      {acao.status === 'Realizada Parcialmente' && <span className="ml-auto text-blue-500 font-bold">Parcial</span>}
+                                      {acao.status === 'Cancelada' && <span className="ml-auto text-red-500 font-bold">Cancelada</span>}
+                                      {acao.status === 'Reagendada' && <span className="ml-auto text-purple-500 font-bold">Reagendada</span>}
                                     </div>
-                                    {acao.necessita_transporte && (
-                                      <Car size={12} className="text-blue-500" />
-                                    )}
                                   </div>
                                   
                                   <p className="text-[11px] font-semibold text-gray-800 mb-1 line-clamp-2 leading-tight">
-                                    {nomeTipo.length > 30 ? nomeTipo.substring(0, 30) + '…' : nomeTipo}
+                                    {nomeTipo.length > 30 ? nomeTipo.substring(0, 20) + '…' : nomeTipo}
                                   </p>
                                   
                                   {acao.local && (
-                                    <div className="flex items-center gap-1 mb-1 text-gray-500">
+                                    <div className="flex items-center gap-1 mb-1 text-gray-700">
                                       <MapPin size={9} />
                                       <span className="text-[9px] truncate">
-                                        {acao.local.length > 22 ? acao.local.substring(0, 22) + '…' : acao.local}
+                                        {acao.local.length > 22 ? acao.local.substring(0, 32) + '…' : acao.local}
                                       </span>
                                     </div>
                                   )}
                                   
-                                  <div className="flex items-center gap-1 text-gray-400">
+                                  <div className="flex items-center gap-1 text-gray-700">
                                     <Building2 size={9} />
                                     <span className="text-[9px] truncate">
                                       {setorCriador?.nome?.length > 18 ? setorCriador.nome.substring(0, 18) + '…' : setorCriador?.nome || 'N/I'}
                                     </span>
+                                    {acao.necessita_transporte && (
+                                      <Car size={18} className="text-black animate-bounce ml-auto" />
+                                    )}
                                   </div>
-                                  
-                                  
                                 </div>
                               )
                             })
@@ -1334,7 +1378,7 @@ export default function DashboardPage() {
         {/* Legenda de status */}
         <div className="px-5 py-3 border-t border-gray-200 bg-gray-50 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-4 text-xs">
-            <span className="text-gray-500">Status:</span>
+            <span className="text-gray-500 font-bold">Status:</span>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-amber-500"></div>
               <span className="text-gray-600">Pendente</span>
@@ -1357,13 +1401,9 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-3 text-xs text-gray-400">
-            <div className="flex items-center gap-1">
-              <Car size={12} />
-              <span>Transporte</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-indigo-400"></div>
-              <span>Clique para detalhes</span>
+            <div className="flex text-blue-500 items-center gap-1">
+              <Car size={24} className='stroke-2 text-blue-500' />
+              <span className='font-semibold'>Transporte</span>
             </div>
           </div>
         </div>
