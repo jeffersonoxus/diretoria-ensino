@@ -15,7 +15,8 @@ import {
   Users,
   ChevronRight,
   AlertCircle,
-  Send
+  Send,
+  Home
 } from "lucide-react"
 
 // Interfaces
@@ -345,17 +346,27 @@ export default function ResponderAcaoPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => router.back()}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => router.back()}
+                className="p-2 hover:bg-gray-100 rounded-full transition"
+              >
+                <ChevronRight className="w-6 h-6 text-gray-600 rotate-180" />
+              </button>
+              <div>
+                <h1 className="text-lg font-bold text-gray-800">Responder Ação</h1>
+                <p className="text-xs text-gray-500">Preencha as informações da visita</p>
+              </div>
+            </div>
+            
+            {/* Botão Home */}
+            <button
+              onClick={() => router.push('/dien')}
               className="p-2 hover:bg-gray-100 rounded-full transition"
             >
-              <ChevronRight className="w-6 h-6 text-gray-600 rotate-180" />
+              <Home size={24} className="text-gray-600" />
             </button>
-            <div>
-              <h1 className="text-lg font-bold text-gray-800">Responder Ação</h1>
-              <p className="text-xs text-gray-500">Preencha as informações da visita</p>
-            </div>
           </div>
         </div>
       </div>

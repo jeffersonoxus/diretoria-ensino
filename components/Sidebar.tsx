@@ -9,19 +9,14 @@ import { useRouter } from 'next/navigation'
 import { 
   Home, 
   User, 
-  Settings, 
   LogOut, 
   Menu, 
   X, 
-  BarChart, 
   ShieldUser,
-  BrainCircuit,
-  Baby,
-  BookOpen,
+  Stethoscope, // Para Diagnóstica
+  FileSpreadsheet, // Para Avaliações
   GraduationCap,
-  Palette,
   ClipboardCheck,
-  Calendar,
   Smartphone
 } from 'lucide-react';
 
@@ -105,7 +100,8 @@ export const Sidebar = () => {
     { href: '/dien', icon: Home, label: 'Dashboard', show: true },
     { href: '/dien/perfil', icon: User, label: 'Meu Perfil', show: true },
     { href: '/dien/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
-    { href: '/dien/avaliacoes_diagnosticas', icon: ClipboardCheck, label: 'Avaliações Diagnósticas', show: true },
+    { href: '/dien/avaliacoes_diagnosticas', icon: Stethoscope, label: 'Avaliações Diagnósticas', show: true },
+    { href: '/dien/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: true },
     { href: '/app', icon: Smartphone, label: 'App Mobile', show: temSetor, external: true },
   ];
 
@@ -157,18 +153,23 @@ export const Sidebar = () => {
         `}
       >
         <div className="flex flex-col h-full">
-          {/* Header com logo e botão fechar */}
+          {/* Header com logo e botão fechar - AGORA CLICÁVEL */}
           <div className="p-5 border-b bg-linear-to-r from-[#7114dd]/5 to-[#a94dff]/5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 bg-linear-to-br from-[#7114dd] to-[#a94dff] rounded-xl flex items-center justify-center">
+              {/* Logo clicável para voltar à página inicial */}
+              <Link 
+                href="/" 
+                onClick={closeSidebar}
+                className="flex items-center gap-2 group cursor-pointer hover:opacity-80 transition-opacity"
+              >
+                <div className="w-10 h-10 bg-linear-to-br from-[#7114dd] to-[#a94dff] rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
                   <GraduationCap className="w-6 h-6 text-white" />
                 </div>
                 <div>
                   <span className="font-bold text-xl text-gray-900">DIEN</span>
                   <p className="text-xs text-gray-500">Diretoria de Ensino</p>
                 </div>
-              </div>
+              </Link>
               
               {isMobile && (
                 <button

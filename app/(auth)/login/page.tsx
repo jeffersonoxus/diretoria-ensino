@@ -38,15 +38,15 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen text-slate-700 bg-gray-50 flex flex-col justify-center px-4 py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="text-center text-3xl font-extrabold text-gray-900">
-          Entrar na sua conta
+        <h2 className="text-center text-2xl font-extrabold text-gray-900">
+          Entrar no Sistema Interno - DIEN
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
           Ou{' '}
           <Link href="/cadastro" className="font-medium text-primary-600 hover:text-primary-500">
-            criar uma nova conta
+            criar uma nova conta no Sistema Intrno - DIEN
           </Link>
         </p>
       </div>

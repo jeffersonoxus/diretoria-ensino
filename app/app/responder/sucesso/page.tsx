@@ -1,11 +1,11 @@
 // app/app/responder/sucesso/page.tsx
 'use client'
 
-import { Suspense } from 'react' // 1. Importar o Suspense
+import { Suspense } from 'react'
 import { useSearchParams, useRouter } from "next/navigation"
-import { CheckCircle, Home, CheckSquare } from "lucide-react"
+import { CheckCircle, Home, ArrowLeft } from "lucide-react"
 
-// 2. Criar um componente interno que contém a lógica dos SearchParams
+// Componente interno que contém a lógica dos SearchParams
 function SucessoContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -50,30 +50,29 @@ function SucessoContent() {
       
       <div className="space-y-3">
         <button
-          onClick={() => router.push('/app')}
+          onClick={() => router.push('/dien')}
           className="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition flex items-center justify-center gap-2"
         >
           <Home size={20} />
-          Ver Próximas Ações
+          Voltar para Página Principal
         </button>
         
         <button
-          onClick={() => router.push('/app/minhas-respostas')}
+          onClick={() => router.push('/app')}
           className="w-full border border-gray-300 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-50 transition flex items-center justify-center gap-2"
         >
-          <CheckSquare size={20} />
-          Ver Minhas Respostas
+          <ArrowLeft size={20} />
+          Voltar para Ações
         </button>
       </div>
     </div>
   )
 }
 
-// 3. A página principal envolve o conteúdo no Suspense
+// Página principal envolve o conteúdo no Suspense
 export default function SucessoPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-emerald-50 flex items-center justify-center p-6">
-      {/* O fallback é o que aparece enquanto o Next processa os parâmetros */}
       <Suspense fallback={<div className="text-gray-500">Carregando confirmação...</div>}>
         <SucessoContent />
       </Suspense>

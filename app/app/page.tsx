@@ -14,7 +14,8 @@ import {
   RefreshCw,
   Building2,
   Loader2,
-  MapPin
+  MapPin,
+  Home
 } from "lucide-react"
 
 interface Acao {
@@ -222,6 +223,14 @@ export default function AppMobilePage() {
     <div className="min-h-screen bg-purple-100 text-slate-700 pb-24">
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-4 py-6 sticky top-0 z-10 shadow-sm">
+        {/* Botão Home */}
+        <button
+          onClick={() => router.push('/dien')}
+          className="absolute top-6 right-4 p-2 hover:bg-gray-100 rounded-full transition"
+        >
+          <Home size={24} className="text-gray-600" />
+        </button>
+        
         <div>
           <h1 className="text-2xl font-bold text-gray-800">
             Olá, {userName}! 👋

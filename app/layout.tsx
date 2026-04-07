@@ -5,8 +5,8 @@ import { Inter } from 'next/font/google'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'MeuApp',
-  description: 'Aplicação com autenticação Supabase',
+  title: 'DIEN',
+  description: 'Painel de controle para a Diretoria de Ensino - DIEN',
 }
 
 export default function RootLayout({

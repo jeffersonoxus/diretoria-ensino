@@ -48,6 +48,8 @@ interface Acao {
   status?: string
   dados_extras?: Record<string, any>
   observacoes?: string
+  created_by_nome?: string
+  updated_by_nome?: string
 }
 
 interface Setor {
@@ -422,6 +424,38 @@ export default function AcoesPage() {
         .order('created_at', { ascending: false })
       
       if (error) throw error
+      
+      // NOVO: Buscar os nomes dos usuários que criaram/atualizaram
+      if (acoesData && acoesData.length > 0) {
+        // Coletar todos os IDs únicos de created_by e updated_by
+        const userIds = new Set<string>()
+        acoesData.forEach(acao => {
+          if (acao.created_by) userIds.add(acao.created_by)
+          if (acao.updated_by) userIds.add(acao.updated_by)
+        })
+        
+        // Buscar os perfis desses usuários
+        const { data: perfisData, error: perfisError } = await supabase
+          .from('perfis')
+          .select('id, nome')
+          .in('id', Array.from(userIds))
+        
+        if (!perfisError && perfisData) {
+          // Criar um mapa ID -> Nome
+          const nomeMap = new Map(perfisData.map(p => [p.id, p.nome]))
+          
+          // Adicionar os nomes às ações
+          const acoesComNomes = acoesData.map(acao => ({
+            ...acao,
+            created_by_nome: nomeMap.get(acao.created_by) || 'Desconhecido',
+            updated_by_nome: nomeMap.get(acao.updated_by) || 'Desconhecido'
+          }))
+          
+          setAcoes(acoesComNomes)
+          return
+        }
+      }
+      
       setAcoes(acoesData || [])
     } catch (error) {
       console.error("Erro ao carregar ações:", error)
@@ -540,6 +574,8 @@ export default function AcoesPage() {
     setSetorSelecionado(acao.setor_id || null)
     setSetorConfirmado(true)
     setFormExpandido(true)
+
+    window.scrollTo({ top: 150, behavior: 'smooth' })
   }
 
   const handleSetorConfirm = () => {
@@ -576,19 +612,13 @@ export default function AcoesPage() {
       const dataInicioFormatada = formatarDataParaBanco(dataInicio)
       const dataFimFormatada = formatarDataParaBanco(dataFim)
       
-      console.log("📅 Datas:")
-      console.log("  Data Início (local input):", dataInicio)
-      console.log("  Data Início (UTC para banco):", dataInicioFormatada)
-      console.log("  Data Fim (local input):", dataFim)
-      console.log("  Data Fim (UTC para banco):", dataFimFormatada)
-
-      const dados = {
+      // Dados comuns para criação E atualização
+      const dadosComuns = {
         descricao,
         pessoas,
         setores_envolvidos: setoresSelecionados,
         tipo_acao_id: tipoAcaoId,
         setor_id: setorSelecionado,
-        created_by: userPerfilId,
         local,
         data_inicio: dataInicioFormatada || null,
         data_fim: dataFimFormatada || null,
@@ -596,28 +626,32 @@ export default function AcoesPage() {
         status,
         dados_extras: dadosExtras,
         observacoes: observacoes,
-        updated_at: new Date().toISOString(),
-        updated_by: userPerfilId
       }
-
-      console.log("📦 Dados a serem salvos:", dados)
 
       let error
       if (editandoAcao) {
-        const result = await supabase
+        // NA ATUALIZAÇÃO: NÃO incluir created_by
+        const { error: updateError } = await supabase
           .from('acoes')
           .update({
-            ...dados,
+            ...dadosComuns,
             updated_at: new Date().toISOString(),
-            updated_by: userPerfilId
+            updated_by: userPerfilId  // ← Só atualiza quem modificou
           })
           .eq('id', editandoAcao.id)
-        error = result.error
+        error = updateError
       } else {
-        const result = await supabase
+        // NA CRIAÇÃO: Inclui created_by e updated_by
+        const { error: insertError } = await supabase
           .from('acoes')
-          .insert([dados])
-        error = result.error
+          .insert([{
+            ...dadosComuns,
+            created_at: new Date().toISOString(),
+            created_by: userPerfilId,  // ← Só na criação
+            updated_at: new Date().toISOString(),
+            updated_by: userPerfilId   // ← Também na criação (inicialmente igual ao created_by)
+          }])
+        error = insertError
       }
 
       if (error) {
@@ -1347,14 +1381,19 @@ export default function AcoesPage() {
                         )}
                         
                         {/* Datas de criação e atualização */}
-                        <div className="flex flex-wrap gap-3 text-xs text-gray-400 mt-3">
-                          <span>
-                            Criado em: {new Date(acao.created_at).toLocaleString('pt-BR')}
-                          </span>
+                        <div className="flex flex-wrap gap-4 text-xs text-gray-500 mt-3 pt-2 border-t border-gray-100">
+                          <div className="flex items-center gap-1">
+                            <span className="font-medium">Criado por:</span>
+                            <span className="text-gray-700">{acao.created_by_nome || 'Desconhecido'}</span>
+                            <span className="text-gray-400">em {new Date(acao.created_at).toLocaleString('pt-BR')}</span>
+                          </div>
+                          
                           {acao.updated_at && acao.updated_at !== acao.created_at && (
-                            <span>
-                              Atualizado em: {new Date(acao.updated_at).toLocaleString('pt-BR')}
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="font-medium">Atualizado por:</span>
+                              <span className="text-gray-700">{acao.updated_by_nome || 'Desconhecido'}</span>
+                              <span className="text-gray-400">em {new Date(acao.updated_at).toLocaleString('pt-BR')}</span>
+                            </div>
                           )}
                         </div>
                       </div>
