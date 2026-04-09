@@ -1,106 +1,148 @@
 // lib/dadosFixos.ts
 
-import { createClient } from "@/lib/supabase/client"
-
 export interface Escola {
+  id: string
   codigo: string
   nome: string
+  turmas: Record<string, string[]> // período -> array de nomes de turmas
+  ativa: boolean
+  created_at: string
 }
 
-export interface Turma {
-  escolaCodigo: string
-  segmento: '1º segmento' | '2º segmento'
+export interface Habilidade {
+  id: string
+  disciplina: string
   periodo: string
-  turma: string
-  totalAlunos: number
+  codigo: string
+  descricao: string
+  ordem: number
 }
 
-// 7 Escolas pré-definidas
-export const ESCOLAS_FIXAS: Escola[] = [
-  { codigo: 'ESC001', nome: 'EMEB Dr. Gustavo Paiva' },
-  { codigo: 'ESC002', nome: 'EMEB Marieta Leão' },
-  { codigo: 'ESC003', nome: 'EMEF Dr. Gastão Oiticica' },
-  { codigo: 'ESC004', nome: 'EMEF Manoel Gonçalves da Silva' },
-  { codigo: 'ESC005', nome: 'EMEF Rosineide Teresa' },
-  { codigo: 'ESC006', nome: 'EMEF Professora Maria Alice' },
-  { codigo: 'ESC007', nome: 'EMEB Padre Antônio Vieira' }
+// Períodos disponíveis (ordem fixa)
+export const PERIODOS = [
+  '1º período', '2º período', '3º período', '4º período',
+  '5º período', '6º período', '7º período', '8º período'
 ]
 
-// Períodos por segmento
-export const PERIODOS_POR_SEGMENTO = {
-  '1º segmento': ['1º período', '2º período', '3º período', '4º período'],
-  '2º segmento': ['5º período', '6º período', '7º período', '8º período']
-}
-
-// Opções de turmas
-export const OPCOES_TURMA = ['Única']
-
-// Gerar todas as turmas pré-definidas para uma escola
-export function gerarTurmasDaEscola(escolaCodigo: string): Turma[] {
-  const turmas: Turma[] = []
+// Habilidades fixas por disciplina e período
+export const HABILIDADES_FIXAS: Habilidade[] = [
+  // Língua Portuguesa - 1º período
+  { id: 'LP1', disciplina: 'Língua Portuguesa', periodo: '1º período', codigo: 'LP01', descricao: 'Identificar letras do alfabeto', ordem: 1 },
+  { id: 'LP2', disciplina: 'Língua Portuguesa', periodo: '1º período', codigo: 'LP02', descricao: 'Reconhecer sílabas simples', ordem: 2 },
+  { id: 'LP3', disciplina: 'Língua Portuguesa', periodo: '1º período', codigo: 'LP03', descricao: 'Ler palavras simples', ordem: 3 },
   
-  for (const turma of ['Única']) {
-    // 1º segmento
-    for (const periodo of PERIODOS_POR_SEGMENTO['1º segmento']) {
-      turmas.push({
-        escolaCodigo,
-        segmento: '1º segmento',
-        periodo,
-        turma,
-        totalAlunos: 0
-      })
-    }
-    
-    // 2º segmento
-    for (const periodo of PERIODOS_POR_SEGMENTO['2º segmento']) {
-      turmas.push({
-        escolaCodigo,
-        segmento: '2º segmento',
-        periodo,
-        turma,
-        totalAlunos: 0
-      })
-    }
-  }
+  // Língua Portuguesa - 2º período
+  { id: 'LP4', disciplina: 'Língua Portuguesa', periodo: '2º período', codigo: 'LP04', descricao: 'Ler frases simples', ordem: 1 },
+  { id: 'LP5', disciplina: 'Língua Portuguesa', periodo: '2º período', codigo: 'LP05', descricao: 'Interpretar texto curto', ordem: 2 },
   
-  return turmas
+  // Língua Portuguesa - 3º período
+  { id: 'LP6', disciplina: 'Língua Portuguesa', periodo: '3º período', codigo: 'LP06', descricao: 'Identificar ideia principal', ordem: 1 },
+  { id: 'LP7', disciplina: 'Língua Portuguesa', periodo: '3º período', codigo: 'LP07', descricao: 'Fazer inferências', ordem: 2 },
+  
+  // Língua Portuguesa - 4º período
+  { id: 'LP8', disciplina: 'Língua Portuguesa', periodo: '4º período', codigo: 'LP08', descricao: 'Identificar gêneros textuais', ordem: 1 },
+  { id: 'LP9', disciplina: 'Língua Portuguesa', periodo: '4º período', codigo: 'LP09', descricao: 'Produzir texto narrativo', ordem: 2 },
+  
+  // Matemática - 1º período
+  { id: 'M1', disciplina: 'Matemática', periodo: '1º período', codigo: 'M01', descricao: 'Identificar números de 0 a 9', ordem: 1 },
+  { id: 'M2', disciplina: 'Matemática', periodo: '1º período', codigo: 'M02', descricao: 'Contar objetos até 10', ordem: 2 },
+  
+  // Matemática - 2º período
+  { id: 'M3', disciplina: 'Matemática', periodo: '2º período', codigo: 'M03', descricao: 'Realizar adição simples', ordem: 1 },
+  { id: 'M4', disciplina: 'Matemática', periodo: '2º período', codigo: 'M04', descricao: 'Realizar subtração simples', ordem: 2 },
+  
+  // Matemática - 3º período
+  { id: 'M5', disciplina: 'Matemática', periodo: '3º período', codigo: 'M05', descricao: 'Resolver problemas de adição', ordem: 1 },
+  { id: 'M6', disciplina: 'Matemática', periodo: '3º período', codigo: 'M06', descricao: 'Resolver problemas de subtração', ordem: 2 },
+  
+  // Matemática - 4º período
+  { id: 'M7', disciplina: 'Matemática', periodo: '4º período', codigo: 'M07', descricao: 'Multiplicação simples', ordem: 1 },
+  { id: 'M8', disciplina: 'Matemática', periodo: '4º período', codigo: 'M08', descricao: 'Divisão simples', ordem: 2 },
+]
+
+// Função para obter habilidades por disciplina e período
+export function getHabilidadesPorPeriodo(disciplina: string, periodo: string): Habilidade[] {
+  return HABILIDADES_FIXAS.filter(
+    h => h.disciplina === disciplina && h.periodo === periodo
+  )
 }
 
-// Obter todas as turmas de todas as escolas
-export function getAllTurmas(): Turma[] {
-  let todasTurmas: Turma[] = []
-  for (const escola of ESCOLAS_FIXAS) {
-    todasTurmas = [...todasTurmas, ...gerarTurmasDaEscola(escola.codigo)]
-  }
-  return todasTurmas
-}
-
-// Obter turmas de uma escola específica
-export function getTurmasByEscola(escolaCodigo: string): Turma[] {
-  return getAllTurmas().filter(t => t.escolaCodigo === escolaCodigo)
-}
-
-// Gerar código de acesso para uma avaliação
+// Função para gerar código de acesso
 export function gerarCodigoAcesso(avaliacaoId: string, escolaCodigo: string, ano: number): string {
   const prefixo = avaliacaoId.slice(0, 4).toUpperCase()
   return `${prefixo}-${escolaCodigo}-${ano}`
 }
 
-// Validar código de acesso - FUNÇÃO CORRIGIDA
-export function validarCodigoAcesso(codigo: string, avaliacaoId: string, ano: number): { valido: boolean; escola?: Escola } {
-  for (const escola of ESCOLAS_FIXAS) {
-    const codigoGerado = gerarCodigoAcesso(avaliacaoId, escola.codigo, ano)
-    if (codigoGerado === codigo.toUpperCase()) {
-      return { valido: true, escola }
-    }
+// Validar código de acesso
+export function validarCodigoAcesso(codigo: string, avaliacao: any, escolaCodigo: string): { valido: boolean; mensagem?: string } {
+  const codigoGerado = gerarCodigoAcesso(avaliacao.id, escolaCodigo, avaliacao.ano)
+  
+  if (codigoGerado !== codigo.toUpperCase()) {
+    return { valido: false, mensagem: 'Código inválido' }
   }
-  return { valido: false }
+  
+  if (!avaliacao.ativa) {
+    return { valido: false, mensagem: 'Esta avaliação está desativada' }
+  }
+  
+  if (avaliacao.data_limite_insercao && new Date() > new Date(avaliacao.data_limite_insercao)) {
+    return { valido: false, mensagem: 'Prazo de inserção encerrado' }
+  }
+  
+  return { valido: true }
 }
 
-// Obter todos os códigos de uma avaliação
-export function getTodosCodigosAcesso(avaliacaoId: string, ano: number): { codigo: string; escola: Escola }[] {
-  return ESCOLAS_FIXAS.map(escola => ({
-    codigo: gerarCodigoAcesso(avaliacaoId, escola.codigo, ano),
-    escola
-  }))
+// Calcular percentual de proficientes
+export function calcularPercentualProficiente(resultado: any): number {
+  const total = (resultado.nivel_insuficiente || 0) + 
+                (resultado.nivel_basico || 0) + 
+                (resultado.nivel_proficiente || 0) + 
+                (resultado.nivel_avancado || 0)
+  
+  if (total === 0) return 0
+  
+  const proficientes = (resultado.nivel_proficiente || 0) + (resultado.nivel_avancado || 0)
+  return (proficientes / total) * 100
+}
+
+// Calcular média da rede
+export function calcularMediaRede(resultados: any[]): number {
+  let totalProficiente = 0
+  let totalAlunos = 0
+  
+  resultados.forEach(r => {
+    const totalNiveis = (r.nivel_insuficiente || 0) + 
+                       (r.nivel_basico || 0) + 
+                       (r.nivel_proficiente || 0) + 
+                       (r.nivel_avancado || 0)
+    totalProficiente += (r.nivel_proficiente || 0) + (r.nivel_avancado || 0)
+    totalAlunos += totalNiveis
+  })
+  
+  return totalAlunos > 0 ? (totalProficiente / totalAlunos) * 100 : 0
+}
+
+// Constantes para tipos de gráfico
+export const TIPOS_GRAFICO = {
+  BARRA: 'barra',
+  BARRA_HORIZONTAL: 'barra_horizontal',
+  PIZZA: 'pizza',
+  LINHA: 'linha'
+} as const
+
+export type TipoGrafico = typeof TIPOS_GRAFICO[keyof typeof TIPOS_GRAFICO]
+
+export const MODALIDADES_VISUALIZACAO = {
+  QUANTITATIVO: 'quantitativo',
+  PERCENTUAL: 'percentual'
+} as const
+
+export type ModalidadeVisualizacao = typeof MODALIDADES_VISUALIZACAO[keyof typeof MODALIDADES_VISUALIZACAO]
+
+// Cores dos níveis
+export const CORES_NIVEIS = {
+  insuficiente: '#FF6B6B',
+  basico: '#FFB347',
+  proficiente: '#4ECDC4',
+  avancado: '#45B7D1'
 }
