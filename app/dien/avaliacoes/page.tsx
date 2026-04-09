@@ -707,31 +707,59 @@ export default function AvaliacoesPage() {
               .print-break {
                 page-break-before: always;
               }
+              
+              /* Evitar quebra de página dentro das tabelas e containers */
+              table, .turma-container, .tabela-container {
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
+              
+              /* Evitar quebra entre o cabeçalho da turma e a tabela */
+              .turma-header {
+                page-break-after: avoid;
+                break-after: avoid;
+              }
+              
+              .turma-tabela {
+                page-break-before: avoid;
+                break-before: avoid;
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
+              
               table {
                 border-collapse: collapse;
                 width: 100%;
                 margin-bottom: 10px;
+                page-break-inside: avoid;
+                break-inside: avoid;
               }
+              
               th, td {
                 border: 1px solid #000;
                 padding: 2px 4px;
                 text-align: left;
-                font-size: 12px;
+                font-size: 10px;
               }
+              
               th {
                 background-color: #f0f0f0;
                 font-weight: bold;
               }
+              
               .text-center {
                 text-align: center;
               }
+              
               .text-right {
                 text-align: right;
               }
+              
               .valor-positivo {
                 color: #22c55e;
                 font-weight: bold;
               }
+              
               .valor-negativo {
                 color: #ef4444;
                 font-weight: bold;
@@ -787,15 +815,41 @@ export default function AvaliacoesPage() {
           </h3>
           
           {turmasRelatorio.map((turma, idx) => (
-            <div key={idx} style={{ marginBottom: '10px', border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
-              <div style={{ backgroundColor: '#f3f4f6', padding: '10px 15px', borderBottom: '1px solid #e5e7eb' }}>
+            <div 
+              key={idx} 
+              className="turma-container"
+              style={{ 
+                marginBottom: '10px', 
+                border: '1px solid #e5e7eb', 
+                borderRadius: '8px', 
+                overflow: 'hidden',
+                pageBreakInside: 'avoid',
+                breakInside: 'avoid'
+              }}
+            >
+              <div 
+                className="turma-header"
+                style={{ 
+                  backgroundColor: '#f3f4f6', 
+                  padding: '10px 15px', 
+                  borderBottom: '1px solid #e5e7eb',
+                }}
+              >
                 <strong>{turma.escola} - {turma.periodo} - Turma {turma.turma}</strong>
                 <span style={{ marginLeft: '15px', fontSize: '12px', color: '#6b7280' }}>
                   Mat: {turma.matriculados} | Freq: {turma.frequentando} | Aval: {turma.avaliados}
                 </span>
               </div>
-              <div style={{ padding: '10px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div 
+                className="turma-tabela"
+                style={{ 
+                  padding: '10px'
+                }}
+              >
+                <table style={{ 
+                  width: '100%', 
+                  borderCollapse: 'collapse'
+                }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f9fafb' }}>
                       <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'left' }}>Disciplina</th>
@@ -840,11 +894,22 @@ export default function AvaliacoesPage() {
 
         {/* Comparativo por Escola */}
         {escolasRelatorio.length > 0 && (
-          <div style={{ marginBottom: '30px' }}>
+          <div 
+            style={{ 
+              marginBottom: '30px',
+              pageBreakInside: 'avoid',
+              breakInside: 'avoid'
+            }}
+          >
             <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', color: '#1f2937', borderLeft: '4px solid #3b82f6', paddingLeft: '10px' }}>
               Comparativo por Escola (%)
             </h3>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table style={{ 
+              width: '100%', 
+              borderCollapse: 'collapse',
+              pageBreakInside: 'avoid',
+              breakInside: 'avoid'
+            }}>
               <thead>
                 <tr style={{ backgroundColor: '#f9fafb' }}>
                   <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'left' }}>Escola</th>
@@ -1388,7 +1453,7 @@ export default function AvaliacoesPage() {
                         cx="50%"
                         cy="50%"
                         outerRadius={120}
-                        label={({ name, percent }) => percent > 0 ? `${name}: ${(percent * 100).toFixed(1)}%` : ''}
+                        label={({ name, percent = 0 }) => percent > 0 ? `${name}: ${(percent * 100).toFixed(1)}%` : ''}
                       >
                         {dadosGraficoNiveis().map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.cor} />
