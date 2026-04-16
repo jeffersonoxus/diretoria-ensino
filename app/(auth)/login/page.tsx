@@ -1,56 +1,56 @@
 // app/(auth)/login/page.tsx
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
-import { Input } from '@/components/ui/Input'
-import { Button } from '@/components/ui/Button'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { createClient } from '@/lib/supabase/client';
 
-export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const supabase = createClient()
+// Componente interno que usa useSearchParams
+function LoginForm() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const supabase = createClient();
 
   useEffect(() => {
-    // Verificar mensagens na URL
-    const confirmed = searchParams.get('confirmed')
-    const msg = searchParams.get('message')
+    const confirmed = searchParams.get('confirmed');
+    const msg = searchParams.get('message');
     
     if (confirmed === 'true') {
-      setMessage('Email confirmado com sucesso! Agora você pode fazer login.')
+      setMessage('Email confirmado com sucesso! Agora você pode fazer login.');
     } else if (msg) {
-      setMessage(decodeURIComponent(msg))
+      setMessage(decodeURIComponent(msg));
     }
-  }, [searchParams])
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
-      })
+      });
 
-      if (error) throw error
+      if (error) throw error;
 
-      router.push('/dien')
-      router.refresh()
+      router.push('/dien');
+      router.refresh();
     } catch (error: any) {
-      setError(error.message)
+      setError(error.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen text-slate-700 bg-gray-50 flex flex-col justify-center px-4 py-12 sm:px-6 lg:px-8">
@@ -68,7 +68,6 @@ export default function LoginPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          {/* Mensagem de confirmação */}
           {message && (
             <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4">
               <p className="text-sm text-green-700">{message}</p>
@@ -100,11 +99,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            <Button
-              type="submit"
-              fullWidth
-              loading={loading}
-            >
+            <Button type="submit" fullWidth loading={loading}>
               Entrar
             </Button>
           </form>
@@ -120,5 +115,14 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
-  )
+  );
+}
+
+// Componente principal com Suspense
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Carregando...</div>}>
+      <LoginForm />
+    </Suspense>
+  );
 }
