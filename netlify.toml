@@ -1,0 +1,30 @@
+# netlify.toml
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/auth/*"
+  to = "/auth/index.html"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/api/*"
+  to = "/api/index.html"
+  status = 200
+  force = false
+
+# Regra específica para o Next.js
+[[redirects]]
+  from = "/_next/*"
+  to = "/_next/:splat"
+  status = 200
+
+# Todas as rotas vão para o Next.js
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

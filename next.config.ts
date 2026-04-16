@@ -1,8 +1,11 @@
-import type { NextConfig } from "next";
+// next.config.ts
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  output: 'standalone', // Importante para Netlify
+  images: {
+    unoptimized: true, // Netlify não suporta otimização padrão
+  },
+}
 
-
-export default nextConfig;
+export default nextConfig

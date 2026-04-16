@@ -1,7 +1,6 @@
-// app/(auth)/cadastro/page.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react' // Adicione useEffect
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Input } from '@/components/ui/Input'
@@ -14,8 +13,14 @@ export default function CadastroPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [redirectUrl, setRedirectUrl] = useState('')
   const router = useRouter()
   const supabase = createClient()
+
+  // Pegar a URL base apenas no cliente
+  useEffect(() => {
+    setRedirectUrl(`${window.location.origin}/auth/confirm`)
+  }, [])
 
   const handleCadastro = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,8 +38,7 @@ export default function CadastroPage() {
         email,
         password,
         options: {
-          // MUDAR AQUI: Redirecionar diretamente para o login
-          emailRedirectTo: `${window.location.origin}/login?confirmed=true`,
+          emailRedirectTo: redirectUrl, // Usa a URL definida no useEffect
         },
       })
 
