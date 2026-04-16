@@ -1,7 +1,8 @@
+// app/(auth)/login/page.tsx
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -12,8 +13,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
+
+  useEffect(() => {
+    // Verificar mensagens na URL
+    const confirmed = searchParams.get('confirmed')
+    const msg = searchParams.get('message')
+    
+    if (confirmed === 'true') {
+      setMessage('Email confirmado com sucesso! Agora você pode fazer login.')
+    } else if (msg) {
+      setMessage(decodeURIComponent(msg))
+    }
+  }, [searchParams])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,13 +61,20 @@ export default function LoginPage() {
         <p className="mt-2 text-center text-sm text-gray-600">
           Ou{' '}
           <Link href="/cadastro" className="font-medium text-primary-600 hover:text-primary-500">
-            criar uma nova conta no Sistema Intrno - DIEN
+            criar uma nova conta no Sistema Interno - DIEN
           </Link>
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+          {/* Mensagem de confirmação */}
+          {message && (
+            <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4">
+              <p className="text-sm text-green-700">{message}</p>
+            </div>
+          )}
+
           <form className="space-y-6" onSubmit={handleLogin}>
             <Input
               label="Email"

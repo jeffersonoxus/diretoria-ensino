@@ -597,14 +597,12 @@ export default function AvaliacoesPage() {
   }
 
   const RelatorioDiagnostico = () => {
-    // Aplicar os filtros nos dados do relatório
     let dadosFiltrados = [...resultados]
     if (filtroEscola) dadosFiltrados = dadosFiltrados.filter(r => r.escola_codigo === filtroEscola)
     if (filtroPeriodo) dadosFiltrados = dadosFiltrados.filter(r => r.periodo === filtroPeriodo)
     if (filtroDisciplina !== 'todas') dadosFiltrados = dadosFiltrados.filter(r => r.disciplina === filtroDisciplina)
     if (filtroTurma) dadosFiltrados = dadosFiltrados.filter(r => r.turma === filtroTurma)
     
-    // Agrupar por turma para os totais
     const turmasUnicasRelatorio = new Map()
     dadosFiltrados.forEach(r => {
       const key = `${r.escola_codigo}_${r.periodo}_${r.turma}`
@@ -640,14 +638,12 @@ export default function AvaliacoesPage() {
     
     const turmasRelatorio = Array.from(turmasUnicasRelatorio.values())
     
-    // Calcular totais
     const totaisRelatorio = {
       matriculados: turmasRelatorio.reduce((sum, t) => sum + t.matriculados, 0),
       frequentando: turmasRelatorio.reduce((sum, t) => sum + t.frequentando, 0),
       avaliados: turmasRelatorio.reduce((sum, t) => sum + t.avaliados, 0)
     }
     
-    // Dados por escola para o relatório
     const escolasMapRelatorio = new Map()
     dadosFiltrados.forEach(r => {
       if (!escolasMapRelatorio.has(r.escola_codigo)) {
@@ -707,26 +703,20 @@ export default function AvaliacoesPage() {
               .print-break {
                 page-break-before: always;
               }
-              
-              /* Evitar quebra de página dentro das tabelas e containers */
               table, .turma-container, .tabela-container {
                 page-break-inside: avoid;
                 break-inside: avoid;
               }
-              
-              /* Evitar quebra entre o cabeçalho da turma e a tabela */
               .turma-header {
                 page-break-after: avoid;
                 break-after: avoid;
               }
-              
               .turma-tabela {
                 page-break-before: avoid;
                 break-before: avoid;
                 page-break-inside: avoid;
                 break-inside: avoid;
               }
-              
               table {
                 border-collapse: collapse;
                 width: 100%;
@@ -734,32 +724,26 @@ export default function AvaliacoesPage() {
                 page-break-inside: avoid;
                 break-inside: avoid;
               }
-              
               th, td {
                 border: 1px solid #000;
                 padding: 2px 4px;
                 text-align: left;
                 font-size: 10px;
               }
-              
               th {
                 background-color: #f0f0f0;
                 font-weight: bold;
               }
-              
               .text-center {
                 text-align: center;
               }
-              
               .text-right {
                 text-align: right;
               }
-              
               .valor-positivo {
                 color: #22c55e;
                 font-weight: bold;
               }
-              
               .valor-negativo {
                 color: #ef4444;
                 font-weight: bold;
@@ -768,7 +752,6 @@ export default function AvaliacoesPage() {
           `
         }} />
         
-        {/* Cabeçalho */}
         <div style={{ textAlign: 'center', marginBottom: '10px', paddingBottom: '10px', borderBottom: '2px solid #000' }}>
           <h1 style={{ fontSize: '24px', marginBottom: '10px', color: '#1f2937' }}>RELATÓRIO DIAGNÓSTICO</h1>
           <h2 style={{ fontSize: '18px', marginBottom: '5px', color: '#374151' }}>{visualizandoResultados?.titulo}</h2>
@@ -776,7 +759,6 @@ export default function AvaliacoesPage() {
           <p style={{ fontSize: '12px', color: '#9ca3af' }}>Data de emissão: {new Date().toLocaleDateString('pt-BR')}</p>
         </div>
 
-        {/* Filtros aplicados */}
         <div style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px', color: '#1f2937' }}>Filtros aplicados:</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', fontSize: '12px' }}>
@@ -787,7 +769,6 @@ export default function AvaliacoesPage() {
           </div>
         </div>
 
-        {/* Quantitativos */}
         <div style={{ marginBottom: '10px' }}>
           <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px', color: '#1f2937', borderLeft: '4px solid #3b82f6', paddingLeft: '10px' }}>
             Quantitativos Gerais
@@ -808,7 +789,6 @@ export default function AvaliacoesPage() {
           </div>
         </div>
 
-        {/* Tabelas por Turma */}
         <div style={{ marginBottom: '10px' }}>
           <h3 style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '15px', color: '#1f2937', borderLeft: '4px solid #3b82f6', paddingLeft: '10px' }}>
             Resultados por Turma
@@ -892,7 +872,6 @@ export default function AvaliacoesPage() {
           )}
         </div>
 
-        {/* Comparativo por Escola */}
         {escolasRelatorio.length > 0 && (
           <div 
             style={{ 
@@ -934,7 +913,6 @@ export default function AvaliacoesPage() {
           </div>
         )}
 
-        {/* Rodapé */}
         <div style={{ marginTop: '30px', paddingTop: '15px', borderTop: '1px solid #e5e7eb', textAlign: 'center', fontSize: '11px', color: '#9ca3af' }}>
           <p>Relatório gerado automaticamente pelo Sistema de Avaliações EJA</p>
           <p>© {new Date().getFullYear()} - Todos os direitos reservados</p>
@@ -994,7 +972,6 @@ export default function AvaliacoesPage() {
           </div>
         </div>
 
-        {/* Lista de Avaliações */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
           <div className="px-6 py-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-100">
             <h2 className="font-semibold text-gray-700">Avaliações Cadastradas</h2>
@@ -1097,7 +1074,6 @@ export default function AvaliacoesPage() {
           )}
         </div>
 
-        {/* Lista de Escolas */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <div className="px-6 py-4 bg-gradient-to-r from-green-50 to-teal-50 border-b border-green-100">
             <h2 className="font-semibold text-gray-700 flex items-center gap-2">
@@ -1162,7 +1138,6 @@ export default function AvaliacoesPage() {
           )}
         </div>
 
-        {/* Modal de Gerenciar Escolas */}
         <Modal isOpen={mostrarGerenciarEscolas} onClose={() => {
           setMostrarGerenciarEscolas(false)
           setEscolaEditando(null)
@@ -1282,7 +1257,6 @@ export default function AvaliacoesPage() {
           </div>
         </Modal>
 
-        {/* Modal de Resultados */}
         <Modal isOpen={!!visualizandoResultados} onClose={() => setVisualizandoResultados(null)} title={`Resultados: ${visualizandoResultados?.titulo || ''}`}>
           {resultados.length === 0 ? (
             <div className="text-center py-12">
@@ -1293,7 +1267,6 @@ export default function AvaliacoesPage() {
             </div>
           ) : (
             <>
-              {/* Botão de Impressão */}
               <div className="flex justify-end mb-4">
                 <button
                   onClick={handleImprimirRelatorio}
@@ -1391,7 +1364,6 @@ export default function AvaliacoesPage() {
                 </div>
               </div>
 
-              {/* Cards de resumo geral - CORRIGIDOS (sem duplicação e em preto) */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-gray-800 rounded-xl p-4 text-center text-white">
                   <Users size={28} className="mx-auto mb-2 text-gray-300" />
@@ -1410,31 +1382,102 @@ export default function AvaliacoesPage() {
                 </div>
               </div>
 
-              {/* Cards de níveis */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4 text-center">
-                  <div className="text-2xl font-bold text-red-600">
-                    {dadosGraficoNiveis().find(d => d.name === 'Insuficiente')?.value || 0}
+              {/* Cards de níveis por disciplina - CORRETO: sempre separado por disciplina, ignorando filtroDisciplina */}
+              <div className="mb-6">
+                <h3 className="font-semibold text-gray-700 mb-3 text-sm">Língua Portuguesa</h3>
+                <div className="grid grid-cols-4 gap-2 mb-4">
+                  <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-3 text-center">
+                    <div className="text-xl font-bold text-red-600">
+                      {resultados
+                        .filter(r => r.disciplina === 'Língua Portuguesa')
+                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
+                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
+                        .filter(r => !filtroTurma || r.turma === filtroTurma)
+                        .reduce((sum, r) => sum + r.nivel_insuficiente, 0)}
+                    </div>
+                    <div className="text-xs text-red-600 mt-1">Insuficiente</div>
                   </div>
-                  <div className="text-xs text-red-600 mt-1">Insuficiente</div>
+                  <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-3 text-center">
+                    <div className="text-xl font-bold text-yellow-600">
+                      {resultados
+                        .filter(r => r.disciplina === 'Língua Portuguesa')
+                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
+                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
+                        .filter(r => !filtroTurma || r.turma === filtroTurma)
+                        .reduce((sum, r) => sum + r.nivel_basico, 0)}
+                    </div>
+                    <div className="text-xs text-yellow-600 mt-1">Básico</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3 text-center">
+                    <div className="text-xl font-bold text-blue-600">
+                      {resultados
+                        .filter(r => r.disciplina === 'Língua Portuguesa')
+                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
+                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
+                        .filter(r => !filtroTurma || r.turma === filtroTurma)
+                        .reduce((sum, r) => sum + r.nivel_proficiente, 0)}
+                    </div>
+                    <div className="text-xs text-blue-600 mt-1">Proficiente</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-3 text-center">
+                    <div className="text-xl font-bold text-green-600">
+                      {resultados
+                        .filter(r => r.disciplina === 'Língua Portuguesa')
+                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
+                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
+                        .filter(r => !filtroTurma || r.turma === filtroTurma)
+                        .reduce((sum, r) => sum + r.nivel_avancado, 0)}
+                    </div>
+                    <div className="text-xs text-green-600 mt-1">Avançado</div>
+                  </div>
                 </div>
-                <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-4 text-center">
-                  <div className="text-2xl font-bold text-yellow-600">
-                    {dadosGraficoNiveis().find(d => d.name === 'Básico')?.value || 0}
+
+                <h3 className="font-semibold text-gray-700 mb-3 text-sm">Matemática</h3>
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-3 text-center">
+                    <div className="text-xl font-bold text-red-600">
+                      {resultados
+                        .filter(r => r.disciplina === 'Matemática')
+                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
+                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
+                        .filter(r => !filtroTurma || r.turma === filtroTurma)
+                        .reduce((sum, r) => sum + r.nivel_insuficiente, 0)}
+                    </div>
+                    <div className="text-xs text-red-600 mt-1">Insuficiente</div>
                   </div>
-                  <div className="text-xs text-yellow-600 mt-1">Básico</div>
-                </div>
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 text-center">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {dadosGraficoNiveis().find(d => d.name === 'Proficiente')?.value || 0}
+                  <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-3 text-center">
+                    <div className="text-xl font-bold text-yellow-600">
+                      {resultados
+                        .filter(r => r.disciplina === 'Matemática')
+                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
+                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
+                        .filter(r => !filtroTurma || r.turma === filtroTurma)
+                        .reduce((sum, r) => sum + r.nivel_basico, 0)}
+                    </div>
+                    <div className="text-xs text-yellow-600 mt-1">Básico</div>
                   </div>
-                  <div className="text-xs text-blue-600 mt-1">Proficiente</div>
-                </div>
-                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 text-center">
-                  <div className="text-2xl font-bold text-green-600">
-                    {dadosGraficoNiveis().find(d => d.name === 'Avançado')?.value || 0}
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3 text-center">
+                    <div className="text-xl font-bold text-blue-600">
+                      {resultados
+                        .filter(r => r.disciplina === 'Matemática')
+                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
+                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
+                        .filter(r => !filtroTurma || r.turma === filtroTurma)
+                        .reduce((sum, r) => sum + r.nivel_proficiente, 0)}
+                    </div>
+                    <div className="text-xs text-blue-600 mt-1">Proficiente</div>
                   </div>
-                  <div className="text-xs text-green-600 mt-1">Avançado</div>
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-3 text-center">
+                    <div className="text-xl font-bold text-green-600">
+                      {resultados
+                        .filter(r => r.disciplina === 'Matemática')
+                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
+                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
+                        .filter(r => !filtroTurma || r.turma === filtroTurma)
+                        .reduce((sum, r) => sum + r.nivel_avancado, 0)}
+                    </div>
+                    <div className="text-xs text-green-600 mt-1">Avançado</div>
+                  </div>
                 </div>
               </div>
 
@@ -1526,7 +1569,6 @@ export default function AvaliacoesPage() {
           )}
         </Modal>
 
-        {/* Modal de Códigos de Acesso */}
         <Modal isOpen={!!mostrarCodigos} onClose={() => setMostrarCodigos(null)} title={`Códigos de Acesso - ${mostrarCodigos?.titulo || ''}`}>
           <div className="space-y-4">
             <div className="bg-blue-50 rounded-xl p-4">
@@ -1571,7 +1613,6 @@ export default function AvaliacoesPage() {
           </div>
         </Modal>
 
-        {/* Modal de Formulário de Avaliação */}
         <Modal isOpen={mostrarFormulario} onClose={resetForm} title={editandoId ? 'Editar Avaliação' : 'Nova Avaliação'}>
           <div className="space-y-4 text-slate-700">
             {erroSalvar && (
@@ -1667,7 +1708,6 @@ export default function AvaliacoesPage() {
         </Modal>
       </div>
 
-      {/* Componente de Relatório para impressão */}
       {mostrarRelatorio && visualizandoResultados && <RelatorioDiagnostico />}
     </div>
   )

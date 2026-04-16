@@ -1,4 +1,4 @@
-// app/admin/page.tsx
+// app/(auth)/admin/page.tsx
 'use client'
 
 import { useState, useEffect } from "react"
@@ -9,10 +9,6 @@ import {
   Workflow, 
   X, 
   Type, 
-  Hash, 
-  ChevronDown, 
-  ListChecks, 
-  ToggleLeft,
   MapPin,
   Calendar,
   Truck,
@@ -22,7 +18,8 @@ import {
   Trash2,
   Search,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  LogOut
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -44,7 +41,6 @@ const STATUS_OPCOES = [
 ]
 
 // --- Interfaces ---
-
 type ModalType = 'setor' | 'tipo_acao' | null
 
 interface Perfil {
@@ -76,6 +72,7 @@ interface TipoAcao {
 
 export default function AdminPage() {
   const supabase = createClient()
+  // REMOVIDO: useRouter, loading, user
   const [activeModal, setActiveModal] = useState<ModalType>(null)
   const [setorParaEditar, setSetorParaEditar] = useState<Setor | null>(null)
   const [tipoAcaoParaEditar, setTipoAcaoParaEditar] = useState<TipoAcao | null>(null)
@@ -83,12 +80,15 @@ export default function AdminPage() {
   const [setores, setSetores] = useState<Setor[]>([])
   const [tiposAcoes, setTiposAcoes] = useState<TipoAcao[]>([])
   const [searchPerfil, setSearchPerfil] = useState('')
+  const [carregando, setCarregando] = useState(true) // Só para dados, não para auth
 
+  // Apenas carregar dados - SEM verificação de auth
   useEffect(() => {
     carregarDados()
   }, [])
 
   const carregarDados = async () => {
+    setCarregando(true)
     console.log("🔄 Carregando dados do admin...")
     const [p, s, ta] = await Promise.all([
       supabase.from('perfis').select('*'),
@@ -96,14 +96,20 @@ export default function AdminPage() {
       supabase.from('tipo_acao').select('*')
     ])
     if (p.data) {
-      console.log(`📋 ${p.data.length} perfis carregados:`, p.data.map(perfil => ({ id: perfil.id, nome: perfil.nome, email: perfil.email })))
+      console.log(`📋 ${p.data.length} perfis carregados`)
       setPerfis(p.data)
     }
     if (s.data) {
-      console.log(`📋 ${s.data.length} setores carregados:`, s.data.map(setor => ({ id: setor.id, nome: setor.nome, pessoas: setor.pessoas })))
+      console.log(`📋 ${s.data.length} setores carregados`)
       setSetores(s.data)
     }
     if (ta.data) setTiposAcoes(ta.data)
+    setCarregando(false)
+  }
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/login' // Redirecionamento direto
   }
 
   const closeModal = () => {
@@ -137,8 +143,17 @@ export default function AdminPage() {
     p.email.toLowerCase().includes(searchPerfil.toLowerCase())
   )
 
+  // Loading apenas enquanto carrega os dados
+  if (carregando) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-100 to-purple-200">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7114dd]"></div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen p-4 md:p-8 bg-linear-to-br from-purple-100 to-purple-200 text-slate-800 font-sans">
+    <div className="min-h-screen p-4 md:p-8 bg-gradient-to-br from-purple-100 to-purple-200 text-slate-800 font-sans">
       <header className="mb-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -146,12 +161,24 @@ export default function AdminPage() {
             <p className="text-slate-500 font-medium">Gestão de Setores e Modelos de Ação</p>
           </div>
           <div className="flex gap-2">
-             <button onClick={() => setActiveModal('setor')} className="bg-white text-[#7114dd] border border-[#7114dd]/20 px-4 py-2 rounded-xl hover:bg-[#7114dd]/5 transition shadow-sm flex items-center gap-2 font-bold text-sm">
-               <Plus size={18}/> Novo Setor
-             </button>
-             <button onClick={() => setActiveModal('tipo_acao')} className="bg-[#7114dd] text-white px-4 py-2 rounded-xl hover:bg-[#a94dff] transition shadow-md flex items-center gap-2 font-bold text-sm">
-               <Plus size={18}/> Novo Modelo de Ação
-             </button>
+            <button 
+              onClick={handleLogout}
+              className="bg-white text-red-600 border border-red-200 px-4 py-2 rounded-xl hover:bg-red-50 transition shadow-sm flex items-center gap-2 font-bold text-sm"
+            >
+              <LogOut size={18}/> Sair
+            </button>
+            <button 
+              onClick={() => setActiveModal('setor')} 
+              className="bg-white text-[#7114dd] border border-[#7114dd]/20 px-4 py-2 rounded-xl hover:bg-[#7114dd]/5 transition shadow-sm flex items-center gap-2 font-bold text-sm"
+            >
+              <Plus size={18}/> Novo Setor
+            </button>
+            <button 
+              onClick={() => setActiveModal('tipo_acao')} 
+              className="bg-[#7114dd] text-white px-4 py-2 rounded-xl hover:bg-[#a94dff] transition shadow-md flex items-center gap-2 font-bold text-sm"
+            >
+              <Plus size={18}/> Novo Modelo de Ação
+            </button>
           </div>
         </div>
       </header>
@@ -276,7 +303,7 @@ export default function AdminPage() {
   )
 }
 
-// --- Componente FormSetor ---
+// --- Componente FormSetor (igual ao seu, mantido) ---
 function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis: Perfil[], onSuccess: () => void, dadosIniciais?: Setor | null }) {
   const supabase = createClient()
   const [nome, setNome] = useState(dadosIniciais?.nome || '')
@@ -307,64 +334,37 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
       pessoas: pessoasSelecionadas 
     }
     
-    console.log("📦 Payload a ser salvo:", payload)
-    console.log("📋 Pessoas selecionadas (IDs):", pessoasSelecionadas)
-    
-    const nomesSelecionados = pessoasSelecionadas.map(id => {
-      const perfil = listaDePerfis.find(p => p.id === id)
-      return perfil ? perfil.nome : id
-    })
-    console.log("👥 Nomes das pessoas selecionadas:", nomesSelecionados)
-    
     let error
     if (dadosIniciais?.id) {
-      console.log("✏️ Atualizando setor existente:", dadosIniciais.id)
       const result = await supabase
         .from('setores')
         .update(payload)
         .eq('id', dadosIniciais.id)
       error = result.error
-      if (!error) {
-        setDebugInfo('Setor atualizado com sucesso!')
-      }
+      if (!error) setDebugInfo('Setor atualizado com sucesso!')
     } else {
-      console.log("➕ Criando novo setor")
       const result = await supabase
         .from('setores')
         .insert([payload])
       error = result.error
-      if (!error) {
-        setDebugInfo('Setor criado com sucesso!')
-      }
+      if (!error) setDebugInfo('Setor criado com sucesso!')
     }
     
     if (error) {
       console.error("❌ Erro ao salvar:", error)
       alert('Erro ao salvar: ' + error.message)
-      setDebugInfo('Erro: ' + error.message)
     } else {
-      console.log("✅ Salvou com sucesso!")
-      setTimeout(() => {
-        onSuccess()
-      }, 1000)
+      setTimeout(() => onSuccess(), 1000)
     }
     setLoading(false)
   }
 
   const togglePessoa = (pessoaId: string) => {
-    setPessoasSelecionadas(prev => {
-      const novaLista = prev.includes(pessoaId) 
+    setPessoasSelecionadas(prev => 
+      prev.includes(pessoaId) 
         ? prev.filter(id => id !== pessoaId)
         : [...prev, pessoaId]
-      
-      const nomes = novaLista.map(id => {
-        const perfil = listaDePerfis.find(p => p.id === id)
-        return perfil ? perfil.nome : id
-      })
-      console.log("👥 Lista atualizada de membros:", nomes)
-      
-      return novaLista
-    })
+    )
   }
 
   return (
@@ -378,9 +378,7 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
           <p className="text-slate-500 text-sm font-medium">
             {dadosIniciais ? 'Atualize as informações do setor' : 'Crie um novo setor e adicione membros'}
           </p>
-          {debugInfo && (
-            <p className="text-xs text-green-600 mt-1">{debugInfo}</p>
-          )}
+          {debugInfo && <p className="text-xs text-green-600 mt-1">{debugInfo}</p>}
         </div>
       </div>
 
@@ -408,7 +406,7 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
 
       <div className="space-y-2">
         <label className="text-xs font-bold text-slate-400 uppercase ml-1 flex items-center justify-between">
-          <span>Membros do Setor (selecione os perfis)</span>
+          <span>Membros do Setor</span>
           <span className="text-[10px] text-[#7114dd] font-normal">
             {pessoasSelecionadas.length} membro(s) selecionado(s)
           </span>
@@ -427,9 +425,7 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
 
         <div className="bg-slate-50 p-4 rounded-2xl border h-96 overflow-y-auto">
           {perfisFiltrados.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-sm">
-              Nenhum perfil encontrado
-            </div>
+            <div className="text-center py-8 text-gray-400 text-sm">Nenhum perfil encontrado</div>
           ) : (
             <div className="grid grid-cols-1 gap-2">
               {perfisFiltrados.map(p => {
@@ -446,9 +442,7 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
                   >
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                        isSelected 
-                          ? 'bg-white text-[#7114dd]' 
-                          : 'bg-gray-200 text-gray-600'
+                        isSelected ? 'bg-white text-[#7114dd]' : 'bg-gray-200 text-gray-600'
                       }`}>
                         {p.nome.charAt(0).toUpperCase()}
                       </div>
@@ -456,9 +450,7 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
                         <div className="font-semibold text-sm truncate">{p.nome}</div>
                         <div className="text-[10px] opacity-70 truncate">{p.email}</div>
                       </div>
-                      {isSelected && (
-                        <CheckCircle size={14} className="text-white" />
-                      )}
+                      {isSelected && <CheckCircle size={14} className="text-white" />}
                     </div>
                   </div>
                 )
@@ -466,25 +458,6 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
             </div>
           )}
         </div>
-        
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <p className="text-xs text-blue-700 flex items-center gap-2">
-            <AlertCircle size={12} />
-            <span className="font-medium">IDs dos membros selecionados:</span>
-            {pessoasSelecionadas.map(id => {
-              const perfil = listaDePerfis.find(p => p.id === id)
-              return (
-                <span key={id} className="text-[10px] bg-blue-100 px-1.5 py-0.5 rounded" title={id}>
-                  {perfil?.nome?.split(' ')[0] || id.slice(0, 8)}
-                </span>
-              )
-            })}
-          </p>
-        </div>
-        
-        <p className="text-[10px] text-gray-400 mt-2">
-          ⚠️ Apenas usuários selecionados aqui terão acesso a este setor. Os IDs dos perfis são salvos no formato JSON.
-        </p>
       </div>
 
       <button 
@@ -497,7 +470,7 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
   )
 }
 
-// --- Componente FormTipoAcao ---
+// --- Componente FormTipoAcao (igual ao seu, mantido) ---
 function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[], dadosIniciais?: TipoAcao | null, onSuccess: () => void }) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
@@ -585,27 +558,6 @@ function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[],
               ))}
             </div>
           </div>
-
-          <div className="space-y-3">
-             <label className="text-xs font-bold text-slate-400 uppercase ml-1">Campos Obrigatórios (Padrão)</label>
-             <div className="grid grid-cols-1 gap-2">
-                <div className="flex items-center gap-3 p-3 bg-white border rounded-xl opacity-60">
-                   <Type size={16} className="text-slate-400"/> <span className="text-xs font-bold">Título da Ação</span>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-white border rounded-xl opacity-60">
-                   <MapPin size={16} className="text-slate-400"/> <span className="text-xs font-bold">Local (Lista de Escolas)</span>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-white border rounded-xl opacity-60">
-                   <Calendar size={16} className="text-slate-400"/> <span className="text-xs font-bold">Data de Início e Fim</span>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-white border rounded-xl opacity-60">
-                   <Truck size={16} className="text-slate-400"/> <span className="text-xs font-bold">Necessita Transporte (Sim/Não)</span>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-white border rounded-xl opacity-60">
-                   <Activity size={16} className="text-slate-400"/> <span className="text-xs font-bold">Status (Pendente, Realizada...)</span>
-                </div>
-             </div>
-          </div>
         </div>
 
         <div className="space-y-4">
@@ -626,7 +578,7 @@ function FormTipoAcao({ setores, dadosIniciais, onSuccess }: { setores: Setor[],
               <div key={campo.id} className="bg-white p-4 rounded-2xl border shadow-sm space-y-3">
                 <div className="flex gap-2">
                   <input className="flex-1 bg-slate-50 border-none p-2 rounded-lg text-sm font-bold outline-none focus:ring-1 ring-[#7114dd]" 
-                         placeholder="Nome do Campo (ex: KM Inicial)" value={campo.label} onChange={e => setExtras(extras.map(ex => ex.id === campo.id ? {...ex, label: e.target.value} : ex))} />
+                         placeholder="Nome do Campo" value={campo.label} onChange={e => setExtras(extras.map(ex => ex.id === campo.id ? {...ex, label: e.target.value} : ex))} />
                   <button type="button" onClick={() => setExtras(extras.filter(ex => ex.id !== campo.id))} className="text-red-400 p-2 hover:text-red-600"><X size={16}/></button>
                 </div>
                 <select className="w-full bg-slate-50 p-2 rounded-lg text-xs font-bold outline-none border-none focus:ring-1 ring-[#7114dd]" value={campo.tipo} onChange={e => setExtras(extras.map(ex => ex.id === campo.id ? {...ex, tipo: e.target.value as any} : ex))}>

@@ -37,6 +37,17 @@ export const Sidebar = () => {
   const router = useRouter()
   const supabase = createClient()
 
+  // ============================================
+  // VERIFICAÇÃO DE ROTA - SIDEBAR NÃO APARECE EM ROTAS ESPECÍFICAS
+  // ============================================
+  const hideSidebarRoutes = ['/login', '/cadastro', '/callback']
+  
+  // Se estiver em uma rota que não deve ter sidebar, não renderiza nada
+  if (hideSidebarRoutes.includes(pathname || '')) {
+    return null
+  }
+  // ============================================
+
   useEffect(() => {
     getUser()
     getPerfil()
@@ -100,7 +111,6 @@ export const Sidebar = () => {
     { href: '/dien', icon: Home, label: 'Dashboard', show: true },
     { href: '/dien/perfil', icon: User, label: 'Meu Perfil', show: true },
     { href: '/dien/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
-    { href: '/dien/avaliacoes_diagnosticas', icon: Stethoscope, label: 'Avaliações Diagnósticas', show: true },
     { href: '/dien/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: true },
     { href: '/app', icon: Smartphone, label: 'App Mobile', show: temSetor, external: true },
   ];

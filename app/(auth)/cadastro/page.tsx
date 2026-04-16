@@ -1,3 +1,4 @@
+// app/(auth)/cadastro/page.tsx
 'use client'
 
 import { useState } from 'react'
@@ -32,7 +33,8 @@ export default function CadastroPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `${location.origin}/auth/callback`,
+          // MUDAR AQUI: Redirecionar diretamente para o login
+          emailRedirectTo: `${window.location.origin}/login?confirmed=true`,
         },
       })
 
