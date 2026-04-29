@@ -6,7 +6,7 @@ import {
   Plus, Pencil, Trash2, School, BarChart3, Copy, X, 
   Power, PowerOff, Target, TrendingUp, AlertCircle, Settings,
   ChevronDown, ChevronUp, Check, Users, UserCheck, UserPlus,
-  Printer, Download, FileText
+  Printer, Download, FileText, HelpCircle
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -16,8 +16,12 @@ import {
   PERIODOS, HABILIDADES_FIXAS, getHabilidadesPorPeriodo,
   TIPOS_GRAFICO, MODALIDADES_VISUALIZACAO, CORES_NIVEIS,
   calcularPercentualProficiente, calcularMediaRede,
-  TipoGrafico, ModalidadeVisualizacao, gerarCodigoAcesso
+  TipoGrafico, ModalidadeVisualizacao, gerarCodigoAcesso,
+  Habilidade
 } from '@/lib/dadosFixos'
+import { useRouter } from 'next/navigation'
+import { useSetorEJA } from '@/hooks/useSetorEJA'
+
 
 interface Escola {
   id: string
@@ -37,6 +41,7 @@ interface Avaliacao {
   tipo_avaliacao: 'niveis' | 'habilidades'
   resultados_niveis: any
   resultados_habilidades: any
+  habilidades_selecionadas?: Record<string, string[]> | null
   created_at: string
 }
 
@@ -76,6 +81,14 @@ interface DadosPorEscola {
   avancadoFormatado: string
 }
 
+interface DadosHabilidadeGrafico {
+  codigo: string
+  descricao: string
+  percentual: number
+  disciplina: string
+  cor: string
+}
+
 function Modal({ isOpen, onClose, title, children }: { isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   if (!isOpen) return null
   return (
@@ -94,6 +107,12 @@ function Modal({ isOpen, onClose, title, children }: { isOpen: boolean; onClose:
   )
 }
 
+const CORES_HABILIDADES = [
+  '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
+  '#f43f5e', '#ef4444', '#f97316', '#eab308', '#22c55e',
+  '#14b8a6', '#06b6d4', '#3b82f6', '#2563eb', '#7c3aed'
+]
+
 export default function AvaliacoesPage() {
   const supabase = createClient()
   const [escolas, setEscolas] = useState<Escola[]>([])
@@ -111,12 +130,14 @@ export default function AvaliacoesPage() {
     ativa: boolean
     data_limite_insercao: string
     tipo_avaliacao: 'niveis' | 'habilidades'
+    habilidades_selecionadas: Record<string, string[]>
   }>({ 
     ano: new Date().getFullYear(), 
     titulo: '',
     ativa: true,
     data_limite_insercao: '',
-    tipo_avaliacao: 'niveis'
+    tipo_avaliacao: 'niveis',
+    habilidades_selecionadas: {}
   })
   const [visualizandoResultados, setVisualizandoResultados] = useState<Avaliacao | null>(null)
   const [resultados, setResultados] = useState<ResultadoTurma[]>([])
@@ -128,12 +149,27 @@ export default function AvaliacoesPage() {
   const [abas, setAbas] = useState<'geral' | 'habilidades'>('geral')
   const [tipoGrafico, setTipoGrafico] = useState<TipoGrafico>('barra')
   const [mostrarRelatorio, setMostrarRelatorio] = useState(false)
+  const [filtroHabilidadeDisciplina, setFiltroHabilidadeDisciplina] = useState<string>('todas')
   const relatorioRef = useRef<HTMLDivElement>(null)
+  const [imprimindo, setImprimindo] = useState(false)
+
+  const router = useRouter()
+  const { isSetorEJA, loading: loadingSetor } = useSetorEJA()
 
   useEffect(() => {
+    if (!loadingSetor && !isSetorEJA) {
+      router.push('/dien')
+    }
+  }, [loadingSetor, isSetorEJA, router])
+
+  useEffect(() => {
+    if (!isSetorEJA) return
     fetchEscolas()
     fetchAvaliacoes()
-  }, [])
+  }, [isSetorEJA])
+
+  if (loadingSetor) return <div className="flex items-center justify-center h-64">Carregando...</div>
+  if (!isSetorEJA) return null
 
   async function fetchEscolas() {
     try {
@@ -157,12 +193,56 @@ export default function AvaliacoesPage() {
         .order('ano', { ascending: false })
       
       if (error) throw error
-      if (data) setAvaliacoes(data)
+      if (data) {
+        const avaliacoesFormatadas = data.map(av => ({
+          ...av,
+          habilidades_selecionadas: av.habilidades_selecionadas || {}
+        }))
+        setAvaliacoes(avaliacoesFormatadas)
+      }
     } catch (error) {
       console.error('Erro ao buscar avaliações:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  function toggleHabilidadeSelecionada(periodo: string, habilidadeId: string) {
+    setFormData(prev => {
+      const novasHabilidades = { ...prev.habilidades_selecionadas }
+      if (!novasHabilidades[periodo]) {
+        novasHabilidades[periodo] = []
+      }
+      
+      if (novasHabilidades[periodo].includes(habilidadeId)) {
+        novasHabilidades[periodo] = novasHabilidades[periodo].filter(id => id !== habilidadeId)
+      } else {
+        novasHabilidades[periodo] = [...novasHabilidades[periodo], habilidadeId]
+      }
+      
+      return { ...prev, habilidades_selecionadas: novasHabilidades }
+    })
+  }
+
+  function selecionarTodasHabilidadesPeriodo(periodo: string) {
+    const habilidades = HABILIDADES_FIXAS.filter(h => h.periodo === periodo)
+    setFormData(prev => ({
+      ...prev,
+      habilidades_selecionadas: {
+        ...prev.habilidades_selecionadas,
+        [periodo]: habilidades.map(h => h.id)
+      }
+    }))
+  }
+
+  function limparHabilidadesPeriodo(periodo: string) {
+    setFormData(prev => ({
+      ...prev,
+      habilidades_selecionadas: {
+        ...prev.habilidades_selecionadas,
+        [periodo]: []
+      }
+    }))
   }
 
   async function handleSalvarEscola() {
@@ -273,20 +353,32 @@ export default function AvaliacoesPage() {
       setErroSalvar('O título da avaliação é obrigatório')
       return
     }
+
+    if (formData.tipo_avaliacao === 'habilidades') {
+      const totalHabilidades = Object.values(formData.habilidades_selecionadas).flat().length
+      if (totalHabilidades === 0) {
+        setErroSalvar('Selecione pelo menos uma habilidade para a avaliação por habilidades')
+        return
+      }
+    }
     
     setSalvando(true)
     setErroSalvar(null)
 
     try {
-      const dados = { 
+      const dados: any = { 
         ano: formData.ano, 
         titulo: formData.titulo.trim(),
         ativa: formData.ativa,
         data_limite_insercao: formData.data_limite_insercao || null,
         tipo_avaliacao: formData.tipo_avaliacao,
-        resultados_niveis: {},
-        resultados_habilidades: {},
         updated_at: new Date().toISOString()
+      }
+
+      if (formData.tipo_avaliacao === 'habilidades') {
+        dados.habilidades_selecionadas = formData.habilidades_selecionadas
+      } else {
+        dados.habilidades_selecionadas = {}
       }
 
       let result
@@ -301,6 +393,8 @@ export default function AvaliacoesPage() {
           .from('avaliacoes_eja')
           .insert([{ 
             ...dados, 
+            resultados_niveis: {},
+            resultados_habilidades: {},
             created_at: new Date().toISOString() 
           }])
           .select()
@@ -351,6 +445,7 @@ export default function AvaliacoesPage() {
 
   async function verResultados(avaliacao: Avaliacao) {
     setVisualizandoResultados(avaliacao)
+    setAbas('geral')
     
     const resultadosExtraidos: ResultadoTurma[] = []
     
@@ -359,7 +454,11 @@ export default function AvaliacoesPage() {
       : avaliacao.resultados_habilidades
     
     if (resultadosFonte) {
-      for (const [escolaCodigo, escolasResultados] of Object.entries(resultadosFonte)) {
+      const resultadosObj = typeof resultadosFonte === 'string' 
+        ? JSON.parse(resultadosFonte) 
+        : resultadosFonte
+      
+      for (const [escolaCodigo, escolasResultados] of Object.entries(resultadosObj)) {
         const escola = escolas.find(e => e.codigo === escolaCodigo)
         
         for (const [periodo, periodosResultados] of Object.entries(escolasResultados as any)) {
@@ -456,7 +555,8 @@ export default function AvaliacoesPage() {
       titulo: '',
       ativa: true,
       data_limite_insercao: '',
-      tipo_avaliacao: 'niveis'
+      tipo_avaliacao: 'niveis',
+      habilidades_selecionadas: {}
     })
     setEditandoId(null)
     setMostrarFormulario(false)
@@ -509,13 +609,17 @@ export default function AvaliacoesPage() {
     return { totalMatriculados, totalFrequentando, totalAvaliados }
   }
 
-  const dadosGraficoNiveis = (): DadosGrafico[] => {
+  function getResultadosFiltrados() {
     let filtrados = [...resultados]
-    
     if (filtroEscola) filtrados = filtrados.filter(r => r.escola_codigo === filtroEscola)
     if (filtroPeriodo) filtrados = filtrados.filter(r => r.periodo === filtroPeriodo)
-    if (filtroDisciplina !== 'todas') filtrados = filtrados.filter(r => r.disciplina === filtroDisciplina)
     if (filtroTurma) filtrados = filtrados.filter(r => r.turma === filtroTurma)
+    if (filtroDisciplina !== 'todas') filtrados = filtrados.filter(r => r.disciplina === filtroDisciplina)
+    return filtrados
+  }
+
+  const dadosGraficoNiveis = (): DadosGrafico[] => {
+    const filtrados = getResultadosFiltrados()
     
     const totalizador = { insuficiente: 0, basico: 0, proficiente: 0, avancado: 0 }
     filtrados.forEach(r => {
@@ -535,14 +639,61 @@ export default function AvaliacoesPage() {
     }))
   }
 
+  const dadosGraficoHabilidades = (): DadosHabilidadeGrafico[] => {
+    let filtrados = [...resultados].filter(r => r.disciplina === 'Geral')
+    
+    if (filtroEscola) filtrados = filtrados.filter(r => r.escola_codigo === filtroEscola)
+    if (filtroPeriodo) filtrados = filtrados.filter(r => r.periodo === filtroPeriodo)
+    if (filtroTurma) filtrados = filtrados.filter(r => r.turma === filtroTurma)
+    
+    const habilidadesAgregadas: Record<string, { totalQuantidade: number; totalAvaliados: number; descricao: string; disciplina: string }> = {}
+    
+    filtrados.forEach(r => {
+      if (r.habilidades) {
+        for (const [codigo, dados] of Object.entries(r.habilidades)) {
+          if (!habilidadesAgregadas[codigo]) {
+            const habilidadeInfo = HABILIDADES_FIXAS.find(h => h.codigo === codigo)
+            habilidadesAgregadas[codigo] = {
+              totalQuantidade: 0,
+              totalAvaliados: 0,
+              descricao: habilidadeInfo?.descricao || codigo,
+              disciplina: habilidadeInfo?.disciplina || 'Geral'
+            }
+          }
+          habilidadesAgregadas[codigo].totalQuantidade += dados.quantidade
+          habilidadesAgregadas[codigo].totalAvaliados += r.alunos_avaliados
+        }
+      }
+    })
+    
+    let resultado = Object.entries(habilidadesAgregadas)
+    if (filtroHabilidadeDisciplina !== 'todas') {
+      resultado = resultado.filter(([_, data]) => data.disciplina === filtroHabilidadeDisciplina)
+    }
+    
+    return resultado.map(([codigo, data], index) => ({
+      codigo,
+      descricao: data.descricao,
+      percentual: data.totalAvaliados > 0 ? (data.totalQuantidade / data.totalAvaliados) * 100 : 0,
+      disciplina: data.disciplina,
+      cor: CORES_HABILIDADES[index % CORES_HABILIDADES.length]
+    })).sort((a, b) => b.percentual - a.percentual)
+  }
+
+  const getDadosHabilidadesPorTurma = () => {
+    let filtrados = [...resultados].filter(r => r.disciplina === 'Geral')
+    
+    if (filtroEscola) filtrados = filtrados.filter(r => r.escola_codigo === filtroEscola)
+    if (filtroPeriodo) filtrados = filtrados.filter(r => r.periodo === filtroPeriodo)
+    if (filtroTurma) filtrados = filtrados.filter(r => r.turma === filtroTurma)
+    
+    return filtrados
+  }
+
   const dadosPorEscola = (): DadosPorEscola[] => {
     const escolasMap = new Map<string, { insuficiente: number; basico: number; proficiente: number; avancado: number; total: number }>()
     
-    let filtrados = [...resultados]
-    if (filtroEscola) filtrados = filtrados.filter(r => r.escola_codigo === filtroEscola)
-    if (filtroPeriodo) filtrados = filtrados.filter(r => r.periodo === filtroPeriodo)
-    if (filtroDisciplina !== 'todas') filtrados = filtrados.filter(r => r.disciplina === filtroDisciplina)
-    if (filtroTurma) filtrados = filtrados.filter(r => r.turma === filtroTurma)
+    const filtrados = getResultadosFiltrados()
     
     filtrados.forEach(r => {
       if (!escolasMap.has(r.escola_codigo)) {
@@ -590,35 +741,40 @@ export default function AvaliacoesPage() {
 
   function handleImprimirRelatorio() {
     setMostrarRelatorio(true)
+    setImprimindo(true)
     setTimeout(() => {
       window.print()
-      setTimeout(() => setMostrarRelatorio(false), 1000)
-    }, 100)
+      setTimeout(() => {
+        setMostrarRelatorio(false)
+        setImprimindo(false)
+      }, 1000)
+    }, 300)
   }
 
-  const RelatorioDiagnostico = () => {
-    let dadosFiltrados = [...resultados]
-    if (filtroEscola) dadosFiltrados = dadosFiltrados.filter(r => r.escola_codigo === filtroEscola)
-    if (filtroPeriodo) dadosFiltrados = dadosFiltrados.filter(r => r.periodo === filtroPeriodo)
-    if (filtroDisciplina !== 'todas') dadosFiltrados = dadosFiltrados.filter(r => r.disciplina === filtroDisciplina)
-    if (filtroTurma) dadosFiltrados = dadosFiltrados.filter(r => r.turma === filtroTurma)
-    
-    const turmasUnicasRelatorio = new Map()
-    dadosFiltrados.forEach(r => {
+  // Relatório de impressão para avaliação por NÍVEIS
+  const RelatorioNiveis = () => {
+    const totais = getTotaisUnicos()
+    const dadosNiveis = dadosGraficoNiveis()
+    const escolasComparativo = dadosPorEscola()
+    const resultadosFiltrados = getResultadosFiltrados()
+
+    // Agrupar por turma
+    const turmasMap = new Map()
+    resultadosFiltrados.forEach(r => {
       const key = `${r.escola_codigo}_${r.periodo}_${r.turma}`
-      if (!turmasUnicasRelatorio.has(key)) {
-        turmasUnicasRelatorio.set(key, {
+      if (!turmasMap.has(key)) {
+        turmasMap.set(key, {
           escola: r.escola_nome,
           periodo: r.periodo,
           turma: r.turma,
           matriculados: r.alunos_matriculados,
           frequentando: r.alunos_frequentando || 0,
           avaliados: r.alunos_avaliados,
-          portugues: null,
-          matematica: null
+          portugues: null as any,
+          matematica: null as any
         })
       }
-      const turmaData = turmasUnicasRelatorio.get(key)
+      const turmaData = turmasMap.get(key)
       if (r.disciplina === 'Língua Portuguesa') {
         turmaData.portugues = {
           insuficiente: r.nivel_insuficiente,
@@ -635,287 +791,360 @@ export default function AvaliacoesPage() {
         }
       }
     })
-    
-    const turmasRelatorio = Array.from(turmasUnicasRelatorio.values())
-    
-    const totaisRelatorio = {
-      matriculados: turmasRelatorio.reduce((sum, t) => sum + t.matriculados, 0),
-      frequentando: turmasRelatorio.reduce((sum, t) => sum + t.frequentando, 0),
-      avaliados: turmasRelatorio.reduce((sum, t) => sum + t.avaliados, 0)
-    }
-    
-    const escolasMapRelatorio = new Map()
-    dadosFiltrados.forEach(r => {
-      if (!escolasMapRelatorio.has(r.escola_codigo)) {
-        escolasMapRelatorio.set(r.escola_codigo, {
-          nome: r.escola_nome,
-          insuficiente: 0,
-          basico: 0,
-          proficiente: 0,
-          avancado: 0,
-          total: 0
-        })
-      }
-      const escola = escolasMapRelatorio.get(r.escola_codigo)
-      escola.insuficiente += r.nivel_insuficiente
-      escola.basico += r.nivel_basico
-      escola.proficiente += r.nivel_proficiente
-      escola.avancado += r.nivel_avancado
-      escola.total += (r.nivel_insuficiente + r.nivel_basico + r.nivel_proficiente + r.nivel_avancado)
-    })
-    
-    const escolasRelatorio = Array.from(escolasMapRelatorio.values()).map(escola => ({
-      nome: escola.nome,
-      insuficiente: escola.total > 0 ? (escola.insuficiente / escola.total) * 100 : 0,
-      basico: escola.total > 0 ? (escola.basico / escola.total) * 100 : 0,
-      proficiente: escola.total > 0 ? (escola.proficiente / escola.total) * 100 : 0,
-      avancado: escola.total > 0 ? (escola.avancado / escola.total) * 100 : 0
-    }))
-    
+
     return (
-      <div ref={relatorioRef} id="relatorio-diagnostico" style={{ 
+      <div id="relatorio-impressao" style={{ 
         fontFamily: 'Arial, sans-serif', 
         maxWidth: '1200px', 
         margin: '0 auto',
-        padding: '20px 20px',
-        backgroundColor: 'white'
+        padding: '20px',
+        backgroundColor: 'white',
+        color: '#000'
       }}>
-        <style dangerouslySetInnerHTML={{
-          __html: `
-            @media print {
-              body * {
-                visibility: hidden;
-              }
-              #relatorio-diagnostico, #relatorio-diagnostico * {
-                visibility: visible;
-              }
-              #relatorio-diagnostico {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                margin: 0;
-                padding: 20px;
-              }
-              .no-print {
-                display: none;
-              }
-              .print-break {
-                page-break-before: always;
-              }
-              table, .turma-container, .tabela-container {
-                page-break-inside: avoid;
-                break-inside: avoid;
-              }
-              .turma-header {
-                page-break-after: avoid;
-                break-after: avoid;
-              }
-              .turma-tabela {
-                page-break-before: avoid;
-                break-before: avoid;
-                page-break-inside: avoid;
-                break-inside: avoid;
-              }
-              table {
-                border-collapse: collapse;
-                width: 100%;
-                margin-bottom: 10px;
-                page-break-inside: avoid;
-                break-inside: avoid;
-              }
-              th, td {
-                border: 1px solid #000;
-                padding: 2px 4px;
-                text-align: left;
-                font-size: 10px;
-              }
-              th {
-                background-color: #f0f0f0;
-                font-weight: bold;
-              }
-              .text-center {
-                text-align: center;
-              }
-              .text-right {
-                text-align: right;
-              }
-              .valor-positivo {
-                color: #22c55e;
-                font-weight: bold;
-              }
-              .valor-negativo {
-                color: #ef4444;
-                font-weight: bold;
-              }
-            }
-          `
-        }} />
-        
-        <div style={{ textAlign: 'center', marginBottom: '10px', paddingBottom: '10px', borderBottom: '2px solid #000' }}>
-          <h1 style={{ fontSize: '24px', marginBottom: '10px', color: '#1f2937' }}>RELATÓRIO DIAGNÓSTICO</h1>
-          <h2 style={{ fontSize: '18px', marginBottom: '5px', color: '#374151' }}>{visualizandoResultados?.titulo}</h2>
-          <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '5px' }}>Ano: {visualizandoResultados?.ano}</p>
-          <p style={{ fontSize: '12px', color: '#9ca3af' }}>Data de emissão: {new Date().toLocaleDateString('pt-BR')}</p>
+        <style>{`
+          @media print {
+            body * { visibility: hidden; }
+            #relatorio-impressao, #relatorio-impressao * { visibility: visible; }
+            #relatorio-impressao { position: absolute; top: 0; left: 0; width: 100%; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 15px; }
+            th, td { border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11px; }
+            th { background-color: #e5e7eb; font-weight: bold; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            h1 { font-size: 20px; margin-bottom: 5px; }
+            h2 { font-size: 16px; margin-bottom: 5px; }
+            h3 { font-size: 14px; margin-bottom: 10px; }
+            .card-total { display: inline-block; width: 30%; padding: 10px; margin: 5px; border: 1px solid #000; text-align: center; }
+            .page-break { page-break-before: always; }
+          }
+        `}</style>
+
+        {/* Cabeçalho */}
+        <div style={{ textAlign: 'center', marginBottom: '20px', paddingBottom: '15px', borderBottom: '2px solid #1f2937' }}>
+          <h1 style={{ color: '#1f2937', marginBottom: '5px' }}>RELATÓRIO DE RESULTADOS - AVALIAÇÃO POR NÍVEIS</h1>
+          <h2 style={{ color: '#374151' }}>{visualizandoResultados?.titulo}</h2>
+          <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '5px' }}>Ano: {visualizandoResultados?.ano}</p>
+          <p style={{ fontSize: '11px', color: '#9ca3af' }}>Emitido em: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}</p>
         </div>
 
-        <div style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px', color: '#1f2937' }}>Filtros aplicados:</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', fontSize: '12px' }}>
-            <div><strong>Escola:</strong> {filtroEscola ? escolas.find(e => e.codigo === filtroEscola)?.nome || filtroEscola : 'Todas'}</div>
-            <div><strong>Período:</strong> {filtroPeriodo || 'Todos'}</div>
-            <div><strong>Disciplina:</strong> {filtroDisciplina === 'todas' ? 'Ambas' : filtroDisciplina}</div>
-            <div><strong>Turma:</strong> {filtroTurma || 'Todas'}</div>
+        {/* Filtros aplicados */}
+        <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#f3f4f6', borderRadius: '4px' }}>
+          <h3 style={{ marginBottom: '8px', fontSize: '13px' }}>Filtros Aplicados:</h3>
+          <table style={{ fontSize: '11px', marginBottom: '0' }}>
+            <tbody>
+              <tr>
+                <td style={{ border: 'none', padding: '2px 8px', fontWeight: 'bold', width: '100px' }}>Escola:</td>
+                <td style={{ border: 'none', padding: '2px 8px' }}>{filtroEscola ? escolas.find(e => e.codigo === filtroEscola)?.nome || filtroEscola : 'Todas'}</td>
+                <td style={{ border: 'none', padding: '2px 8px', fontWeight: 'bold', width: '100px' }}>Período:</td>
+                <td style={{ border: 'none', padding: '2px 8px' }}>{filtroPeriodo || 'Todos'}</td>
+              </tr>
+              <tr>
+                <td style={{ border: 'none', padding: '2px 8px', fontWeight: 'bold' }}>Disciplina:</td>
+                <td style={{ border: 'none', padding: '2px 8px' }}>{filtroDisciplina === 'todas' ? 'Ambas' : filtroDisciplina}</td>
+                <td style={{ border: 'none', padding: '2px 8px', fontWeight: 'bold' }}>Turma:</td>
+                <td style={{ border: 'none', padding: '2px 8px' }}>{filtroTurma || 'Todas'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totais */}
+        <h3 style={{ borderLeft: '4px solid #3b82f6', paddingLeft: '10px' }}>Quantitativos Gerais</h3>
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+          <div className="card-total">
+            <div style={{ fontSize: '22px', fontWeight: 'bold' }}>{totais.totalMatriculados}</div>
+            <div style={{ fontSize: '11px' }}>Matriculados</div>
+          </div>
+          <div className="card-total">
+            <div style={{ fontSize: '22px', fontWeight: 'bold' }}>{totais.totalFrequentando}</div>
+            <div style={{ fontSize: '11px' }}>Frequentando</div>
+          </div>
+          <div className="card-total">
+            <div style={{ fontSize: '22px', fontWeight: 'bold' }}>{totais.totalAvaliados}</div>
+            <div style={{ fontSize: '11px' }}>Avaliados</div>
           </div>
         </div>
 
-        <div style={{ marginBottom: '10px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px', color: '#1f2937', borderLeft: '4px solid #3b82f6', paddingLeft: '10px' }}>
-            Quantitativos Gerais
-          </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '5px' }}>
-            <div style={{ backgroundColor: '#1f2937', padding: '10px', borderRadius: '8px', textAlign: 'center', color: 'white' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{totaisRelatorio.matriculados}</div>
-              <div style={{ fontSize: '12px', marginTop: '5px' }}>Total de Matriculados</div>
-            </div>
-            <div style={{ backgroundColor: '#1f2937', padding: '10px', borderRadius: '8px', textAlign: 'center', color: 'white' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{totaisRelatorio.frequentando}</div>
-              <div style={{ fontSize: '12px', marginTop: '5px' }}>Total de Frequentando</div>
-            </div>
-            <div style={{ backgroundColor: '#1f2937', padding: '10px', borderRadius: '8px', textAlign: 'center', color: 'white' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{totaisRelatorio.avaliados}</div>
-              <div style={{ fontSize: '12px', marginTop: '5px' }}>Total de Avaliados</div>
-            </div>
-          </div>
-        </div>
+        {/* Distribuição por níveis */}
+        <h3 style={{ borderLeft: '4px solid #3b82f6', paddingLeft: '10px' }}>Distribuição por Níveis</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Nível</th>
+              <th className="text-center">Quantidade</th>
+              <th className="text-center">Percentual</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dadosNiveis.map(nivel => (
+              <tr key={nivel.name}>
+                <td style={{ color: nivel.cor, fontWeight: 'bold' }}>{nivel.name}</td>
+                <td className="text-center">{nivel.value}</td>
+                <td className="text-center">{nivel.percentual}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-        <div style={{ marginBottom: '10px' }}>
-          <h3 style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '15px', color: '#1f2937', borderLeft: '4px solid #3b82f6', paddingLeft: '10px' }}>
-            Resultados por Turma
-          </h3>
-          
-          {turmasRelatorio.map((turma, idx) => (
-            <div 
-              key={idx} 
-              className="turma-container"
-              style={{ 
-                marginBottom: '10px', 
-                border: '1px solid #e5e7eb', 
-                borderRadius: '8px', 
-                overflow: 'hidden',
-                pageBreakInside: 'avoid',
-                breakInside: 'avoid'
-              }}
-            >
-              <div 
-                className="turma-header"
-                style={{ 
-                  backgroundColor: '#f3f4f6', 
-                  padding: '10px 15px', 
-                  borderBottom: '1px solid #e5e7eb',
-                }}
-              >
-                <strong>{turma.escola} - {turma.periodo} - Turma {turma.turma}</strong>
-                <span style={{ marginLeft: '15px', fontSize: '12px', color: '#6b7280' }}>
-                  Mat: {turma.matriculados} | Freq: {turma.frequentando} | Aval: {turma.avaliados}
-                </span>
-              </div>
-              <div 
-                className="turma-tabela"
-                style={{ 
-                  padding: '10px'
-                }}
-              >
-                <table style={{ 
-                  width: '100%', 
-                  borderCollapse: 'collapse'
-                }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f9fafb' }}>
-                      <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'left' }}>Disciplina</th>
-                      <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>Insuficiente</th>
-                      <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>Básico</th>
-                      <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>Proficiente</th>
-                      <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>Avançado</th>
-                      <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {turma.portugues && (
-                      <tr>
-                        <td style={{ border: '1px solid #000', padding: '8px' }}>Língua Portuguesa</td>
-                        <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', color: '#ef4444' }}>{turma.portugues.insuficiente}</td>
-                        <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', color: '#eab308' }}>{turma.portugues.basico}</td>
-                        <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', color: '#3b82f6' }}>{turma.portugues.proficiente}</td>
-                        <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', color: '#22c55e' }}>{turma.portugues.avancado}</td>
-                        <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>{turma.avaliados}</td>
-                      </tr>
-                    )}
-                    {turma.matematica && (
-                      <tr>
-                        <td style={{ border: '1px solid #000', padding: '8px' }}>Matemática</td>
-                        <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', color: '#ef4444' }}>{turma.matematica.insuficiente}</td>
-                        <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', color: '#eab308' }}>{turma.matematica.basico}</td>
-                        <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', color: '#3b82f6' }}>{turma.matematica.proficiente}</td>
-                        <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', color: '#22c55e' }}>{turma.matematica.avancado}</td>
-                        <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>{turma.avaliados}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+        {/* Resultados por turma */}
+        <div className="page-break"></div>
+        <h3 style={{ borderLeft: '4px solid #3b82f6', paddingLeft: '10px' }}>Resultados por Turma</h3>
+        {Array.from(turmasMap.values()).map((turma: any, idx) => (
+          <div key={idx} style={{ marginBottom: '15px', border: '1px solid #e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ backgroundColor: '#f3f4f6', padding: '8px 12px', fontWeight: 'bold', fontSize: '12px' }}>
+              {turma.escola} - {turma.periodo} - Turma {turma.turma}
+              <span style={{ marginLeft: '15px', fontSize: '11px', color: '#6b7280', fontWeight: 'normal' }}>
+                Mat: {turma.matriculados} | Freq: {turma.frequentando} | Aval: {turma.avaliados}
+              </span>
             </div>
-          ))}
-          
-          {turmasRelatorio.length === 0 && (
-            <p style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>Nenhum resultado encontrado com os filtros selecionados.</p>
-          )}
-        </div>
-
-        {escolasRelatorio.length > 0 && (
-          <div 
-            style={{ 
-              marginBottom: '30px',
-              pageBreakInside: 'avoid',
-              breakInside: 'avoid'
-            }}
-          >
-            <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', color: '#1f2937', borderLeft: '4px solid #3b82f6', paddingLeft: '10px' }}>
-              Comparativo por Escola (%)
-            </h3>
-            <table style={{ 
-              width: '100%', 
-              borderCollapse: 'collapse',
-              pageBreakInside: 'avoid',
-              breakInside: 'avoid'
-            }}>
+            <table style={{ marginBottom: '0' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f9fafb' }}>
-                  <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'left' }}>Escola</th>
-                  <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>Insuficiente</th>
-                  <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>Básico</th>
-                  <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>Proficiente</th>
-                  <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>Avançado</th>
+                <tr>
+                  <th>Disciplina</th>
+                  <th className="text-center">Insuf.</th>
+                  <th className="text-center">Básico</th>
+                  <th className="text-center">Profic.</th>
+                  <th className="text-center">Avanç.</th>
+                  <th className="text-center">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {escolasRelatorio.map((escola, idx) => (
+                {turma.portugues && (
+                  <tr>
+                    <td>Língua Portuguesa</td>
+                    <td className="text-center" style={{ color: '#ef4444' }}>{turma.portugues.insuficiente}</td>
+                    <td className="text-center" style={{ color: '#eab308' }}>{turma.portugues.basico}</td>
+                    <td className="text-center" style={{ color: '#3b82f6' }}>{turma.portugues.proficiente}</td>
+                    <td className="text-center" style={{ color: '#22c55e' }}>{turma.portugues.avancado}</td>
+                    <td className="text-center">{turma.avaliados}</td>
+                  </tr>
+                )}
+                {turma.matematica && (
+                  <tr>
+                    <td>Matemática</td>
+                    <td className="text-center" style={{ color: '#ef4444' }}>{turma.matematica.insuficiente}</td>
+                    <td className="text-center" style={{ color: '#eab308' }}>{turma.matematica.basico}</td>
+                    <td className="text-center" style={{ color: '#3b82f6' }}>{turma.matematica.proficiente}</td>
+                    <td className="text-center" style={{ color: '#22c55e' }}>{turma.matematica.avancado}</td>
+                    <td className="text-center">{turma.avaliados}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ))}
+
+        {/* Comparativo por escola */}
+        {escolasComparativo.length > 0 && (
+          <>
+            <div className="page-break"></div>
+            <h3 style={{ borderLeft: '4px solid #3b82f6', paddingLeft: '10px' }}>Comparativo por Escola (%)</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Escola</th>
+                  <th className="text-center">Insuficiente</th>
+                  <th className="text-center">Básico</th>
+                  <th className="text-center">Proficiente</th>
+                  <th className="text-center">Avançado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {escolasComparativo.map((escola, idx) => (
                   <tr key={idx}>
-                    <td style={{ border: '1px solid #000', padding: '8px' }}>{escola.nome}</td>
-                    <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', color: '#ef4444', fontWeight: 'bold' }}>{escola.insuficiente.toFixed(1)}%</td>
-                    <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', color: '#eab308', fontWeight: 'bold' }}>{escola.basico.toFixed(1)}%</td>
-                    <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', color: '#3b82f6', fontWeight: 'bold' }}>{escola.proficiente.toFixed(1)}%</td>
-                    <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center', color: '#22c55e', fontWeight: 'bold' }}>{escola.avancado.toFixed(1)}%</td>
+                    <td>{escola.escola}</td>
+                    <td className="text-center" style={{ color: '#ef4444', fontWeight: 'bold' }}>{escola.insuficienteFormatado}%</td>
+                    <td className="text-center" style={{ color: '#eab308', fontWeight: 'bold' }}>{escola.basicoFormatado}%</td>
+                    <td className="text-center" style={{ color: '#3b82f6', fontWeight: 'bold' }}>{escola.proficienteFormatado}%</td>
+                    <td className="text-center" style={{ color: '#22c55e', fontWeight: 'bold' }}>{escola.avancadoFormatado}%</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </>
         )}
 
-        <div style={{ marginTop: '30px', paddingTop: '15px', borderTop: '1px solid #e5e7eb', textAlign: 'center', fontSize: '11px', color: '#9ca3af' }}>
-          <p>Relatório gerado automaticamente pelo Sistema de Avaliações EJA</p>
-          <p>© {new Date().getFullYear()} - Todos os direitos reservados</p>
+        {/* Rodapé */}
+        <div style={{ marginTop: '30px', paddingTop: '15px', borderTop: '1px solid #e5e7eb', textAlign: 'center', fontSize: '10px', color: '#9ca3af' }}>
+          <p>Sistema de Avaliações EJA - Relatório gerado em {new Date().toLocaleDateString('pt-BR')}</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Relatório de impressão para avaliação por HABILIDADES
+  const RelatorioHabilidades = () => {
+    const totais = getTotaisUnicos()
+    const habilidadesGrafico = dadosGraficoHabilidades()
+    const turmasHabilidades = getDadosHabilidadesPorTurma()
+
+    return (
+      <div id="relatorio-impressao" style={{ 
+        fontFamily: 'Arial, sans-serif', 
+        maxWidth: '1200px', 
+        margin: '0 auto',
+        padding: '20px',
+        backgroundColor: 'white',
+        color: '#000'
+      }}>
+        <style>{`
+          @media print {
+            body * { visibility: hidden; }
+            #relatorio-impressao, #relatorio-impressao * { visibility: visible; }
+            #relatorio-impressao { position: absolute; top: 0; left: 0; width: 100%; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 15px; }
+            th, td { border: 1px solid #000; padding: 5px 6px; text-align: left; font-size: 10px; }
+            th { background-color: #e5e7eb; font-weight: bold; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            h1 { font-size: 20px; margin-bottom: 5px; }
+            h2 { font-size: 16px; margin-bottom: 5px; }
+            h3 { font-size: 14px; margin-bottom: 10px; }
+            .card-total { display: inline-block; width: 30%; padding: 10px; margin: 5px; border: 1px solid #000; text-align: center; }
+            .hab-card { display: inline-block; width: 30%; padding: 10px; margin: 5px; border: 1px solid #e5e7eb; border-radius: 4px; vertical-align: top; }
+            .barra-progresso { width: 100%; height: 8px; background-color: #e5e7eb; border-radius: 4px; margin-top: 4px; }
+            .barra-preenchida { height: 8px; border-radius: 4px; }
+            .page-break { page-break-before: always; }
+          }
+        `}</style>
+
+        {/* Cabeçalho */}
+        <div style={{ textAlign: 'center', marginBottom: '20px', paddingBottom: '15px', borderBottom: '2px solid #1f2937' }}>
+          <h1 style={{ color: '#1f2937', marginBottom: '5px' }}>RELATÓRIO DE RESULTADOS - AVALIAÇÃO POR HABILIDADES</h1>
+          <h2 style={{ color: '#374151' }}>{visualizandoResultados?.titulo}</h2>
+          <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '5px' }}>Ano: {visualizandoResultados?.ano}</p>
+          <p style={{ fontSize: '11px', color: '#9ca3af' }}>Emitido em: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}</p>
+        </div>
+
+        {/* Filtros aplicados */}
+        <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#f3f4f6', borderRadius: '4px' }}>
+          <h3 style={{ marginBottom: '8px', fontSize: '13px' }}>Filtros Aplicados:</h3>
+          <table style={{ fontSize: '11px', marginBottom: '0' }}>
+            <tbody>
+              <tr>
+                <td style={{ border: 'none', padding: '2px 8px', fontWeight: 'bold', width: '100px' }}>Escola:</td>
+                <td style={{ border: 'none', padding: '2px 8px' }}>{filtroEscola ? escolas.find(e => e.codigo === filtroEscola)?.nome || filtroEscola : 'Todas'}</td>
+                <td style={{ border: 'none', padding: '2px 8px', fontWeight: 'bold', width: '100px' }}>Período:</td>
+                <td style={{ border: 'none', padding: '2px 8px' }}>{filtroPeriodo || 'Todos'}</td>
+              </tr>
+              <tr>
+                <td style={{ border: 'none', padding: '2px 8px', fontWeight: 'bold' }}>Disciplina:</td>
+                <td style={{ border: 'none', padding: '2px 8px' }}>{filtroHabilidadeDisciplina === 'todas' ? 'Todas' : filtroHabilidadeDisciplina}</td>
+                <td style={{ border: 'none', padding: '2px 8px', fontWeight: 'bold' }}>Turma:</td>
+                <td style={{ border: 'none', padding: '2px 8px' }}>{filtroTurma || 'Todas'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totais */}
+        <h3 style={{ borderLeft: '4px solid #8b5cf6', paddingLeft: '10px' }}>Quantitativos Gerais</h3>
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+          <div className="card-total">
+            <div style={{ fontSize: '22px', fontWeight: 'bold' }}>{totais.totalMatriculados}</div>
+            <div style={{ fontSize: '11px' }}>Matriculados</div>
+          </div>
+          <div className="card-total">
+            <div style={{ fontSize: '22px', fontWeight: 'bold' }}>{totais.totalFrequentando}</div>
+            <div style={{ fontSize: '11px' }}>Frequentando</div>
+          </div>
+          <div className="card-total">
+            <div style={{ fontSize: '22px', fontWeight: 'bold' }}>{totais.totalAvaliados}</div>
+            <div style={{ fontSize: '11px' }}>Avaliados</div>
+          </div>
+        </div>
+
+        {/* Resumo por Habilidade */}
+        <h3 style={{ borderLeft: '4px solid #8b5cf6', paddingLeft: '10px' }}>Desempenho por Habilidade</h3>
+        <div style={{ marginBottom: '20px' }}>
+          {habilidadesGrafico.map((hab) => (
+            <div key={hab.codigo} className="hab-card">
+              <div style={{ marginBottom: '4px' }}>
+                <span style={{ 
+                  display: 'inline-block', 
+                  padding: '2px 6px', 
+                  borderRadius: '3px', 
+                  fontSize: '10px', 
+                  fontWeight: 'bold',
+                  backgroundColor: hab.cor + '20',
+                  color: hab.cor
+                }}>
+                  {hab.codigo}
+                </span>
+                <span style={{ fontSize: '10px', color: '#6b7280', marginLeft: '6px' }}>{hab.disciplina}</span>
+              </div>
+              <div style={{ fontSize: '12px', marginBottom: '4px' }}>{hab.descricao}</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: hab.cor }}>{hab.percentual.toFixed(1)}%</div>
+              <div style={{ fontSize: '10px', color: '#6b7280' }}>de acerto</div>
+              <div className="barra-progresso">
+                <div className="barra-preenchida" style={{ width: `${hab.percentual}%`, backgroundColor: hab.cor }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabela por Turma */}
+        <div className="page-break"></div>
+        <h3 style={{ borderLeft: '4px solid #8b5cf6', paddingLeft: '10px' }}>Resultados por Turma (%)</h3>
+        {turmasHabilidades.length > 0 && (
+          <table style={{ fontSize: '9px' }}>
+            <thead>
+              <tr>
+                <th>Escola</th>
+                <th>Período</th>
+                <th>Turma</th>
+                <th className="text-center">Mat.</th>
+                <th className="text-center">Aval.</th>
+                {habilidadesGrafico.map(hab => (
+                  <th key={hab.codigo} className="text-center" style={{ fontSize: '8px' }}>{hab.codigo}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {turmasHabilidades.map((r, idx) => (
+                <tr key={idx}>
+                  <td>{r.escola_nome}</td>
+                  <td>{r.periodo}</td>
+                  <td>{r.turma}</td>
+                  <td className="text-center">{r.alunos_matriculados}</td>
+                  <td className="text-center">{r.alunos_avaliados}</td>
+                  {habilidadesGrafico.map(hab => {
+                    const habData = r.habilidades?.[hab.codigo]
+                    const percentual = habData?.percentual || 0
+                    return (
+                      <td key={hab.codigo} className="text-center" style={{ color: hab.cor, fontWeight: 'bold' }}>
+                        {percentual.toFixed(0)}%
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {/* Legenda */}
+        <div style={{ marginTop: '20px', padding: '10px', backgroundColor: '#f3f4f6', borderRadius: '4px' }}>
+          <h3 style={{ fontSize: '12px', marginBottom: '8px' }}>Legenda das Habilidades</h3>
+          {habilidadesGrafico.map(hab => (
+            <div key={hab.codigo} style={{ display: 'inline-block', marginRight: '20px', marginBottom: '6px', fontSize: '10px' }}>
+              <span style={{ 
+                display: 'inline-block', 
+                width: '10px', 
+                height: '10px', 
+                borderRadius: '2px', 
+                backgroundColor: hab.cor,
+                marginRight: '4px',
+                verticalAlign: 'middle'
+              }}></span>
+              <strong>{hab.codigo}</strong> - {hab.descricao} ({hab.disciplina})
+            </div>
+          ))}
+        </div>
+
+        {/* Rodapé */}
+        <div style={{ marginTop: '30px', paddingTop: '15px', borderTop: '1px solid #e5e7eb', textAlign: 'center', fontSize: '10px', color: '#9ca3af' }}>
+          <p>Sistema de Avaliações EJA - Relatório gerado em {new Date().toLocaleDateString('pt-BR')}</p>
         </div>
       </div>
     )
@@ -932,6 +1161,7 @@ export default function AvaliacoesPage() {
   return (
     <div className="min-h-screen text-slate-700 bg-gradient-to-br from-indigo-50 via-white to-purple-50">
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Cabeçalho */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
@@ -972,6 +1202,7 @@ export default function AvaliacoesPage() {
           </div>
         </div>
 
+        {/* Lista de Avaliações */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
           <div className="px-6 py-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-100">
             <h2 className="font-semibold text-gray-700">Avaliações Cadastradas</h2>
@@ -1013,6 +1244,11 @@ export default function AvaliacoesPage() {
                         <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">
                           {av.tipo_avaliacao === 'niveis' ? 'Por Níveis' : 'Por Habilidades'}
                         </span>
+                        {av.tipo_avaliacao === 'habilidades' && av.habilidades_selecionadas && (
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                            {Object.values(av.habilidades_selecionadas).flat().length} habilidades
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-gray-500 mt-1">
                         Ano: {av.ano} | Criado: {new Date(av.created_at).toLocaleDateString('pt-BR')}
@@ -1051,7 +1287,8 @@ export default function AvaliacoesPage() {
                             titulo: av.titulo,
                             ativa: av.ativa,
                             data_limite_insercao: av.data_limite_insercao || '',
-                            tipo_avaliacao: av.tipo_avaliacao
+                            tipo_avaliacao: av.tipo_avaliacao,
+                            habilidades_selecionadas: av.habilidades_selecionadas || {}
                           })
                           setMostrarFormulario(true)
                           setErroSalvar(null)
@@ -1074,6 +1311,7 @@ export default function AvaliacoesPage() {
           )}
         </div>
 
+        {/* Lista de Escolas */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <div className="px-6 py-4 bg-gradient-to-r from-green-50 to-teal-50 border-b border-green-100">
             <h2 className="font-semibold text-gray-700 flex items-center gap-2">
@@ -1124,10 +1362,10 @@ export default function AvaliacoesPage() {
                   <div className="mt-2">
                     <p className="text-xs text-gray-600 mb-1">Turmas por período:</p>
                     <div className="space-y-1">
-                      {Object.entries(escola.turmas).map(([periodo, turmasLista]) => (
+                      {Object.entries(escola.turmas || {}).map(([periodo, turmasLista]) => (
                         <div key={periodo} className="text-xs">
                           <span className="font-medium">{periodo}:</span>{' '}
-                          <span className="text-gray-600">{turmasLista.join(', ')}</span>
+                          <span className="text-gray-600">{Array.isArray(turmasLista) ? turmasLista.join(', ') : ''}</span>
                         </div>
                       ))}
                     </div>
@@ -1138,126 +1376,8 @@ export default function AvaliacoesPage() {
           )}
         </div>
 
-        <Modal isOpen={mostrarGerenciarEscolas} onClose={() => {
-          setMostrarGerenciarEscolas(false)
-          setEscolaEditando(null)
-          setErroSalvar(null)
-        }} title={escolaEditando?.id ? 'Editar Escola' : 'Nova Escola'}>
-          <div className="space-y-4">
-            {erroSalvar && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2">
-                <AlertCircle size={18} className="text-red-500 mt-0.5 shrink-0" />
-                <div className="text-sm text-red-700">{erroSalvar}</div>
-              </div>
-            )}
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Código da Escola</label>
-                <input
-                  type="text"
-                  value={escolaEditando?.codigo || ''}
-                  onChange={(e) => setEscolaEditando(prev => prev ? { ...prev, codigo: e.target.value.toUpperCase() } : null)}
-                  className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Ex: ESC001"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Nome da Escola</label>
-                <input
-                  type="text"
-                  value={escolaEditando?.nome || ''}
-                  onChange={(e) => setEscolaEditando(prev => prev ? { ...prev, nome: e.target.value } : null)}
-                  className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Ex: EMEB Dr. Gustavo Paiva"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={escolaEditando?.ativa || false}
-                  onChange={(e) => setEscolaEditando(prev => prev ? { ...prev, ativa: e.target.checked } : null)}
-                  className="w-4 h-4 text-indigo-600"
-                />
-                <span className="text-sm text-gray-700">Escola Ativa</span>
-              </label>
-            </div>
-
-            <div className="border-t pt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-3">Turmas por Período</label>
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {PERIODOS.map((periodo) => (
-                  <div key={periodo} className="border rounded-lg p-3">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium">{periodo}</span>
-                      <button
-                        onClick={() => adicionarTurma(periodo)}
-                        className="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-200"
-                      >
-                        + Adicionar Turma
-                      </button>
-                    </div>
-                    <div className="space-y-2">
-                      {(escolaEditando?.turmas[periodo] || []).map((turma, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={turma}
-                            onChange={(e) => {
-                              const novasTurmas = [...(escolaEditando?.turmas[periodo] || [])]
-                              novasTurmas[idx] = e.target.value
-                              atualizarTurmasEscola(periodo, novasTurmas)
-                            }}
-                            className="flex-1 p-2 border rounded-lg text-sm"
-                          />
-                          <button
-                            onClick={() => removerTurma(periodo, idx)}
-                            className="text-red-500 hover:text-red-700"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      ))}
-                      {(escolaEditando?.turmas[periodo] || []).length === 0 && (
-                        <p className="text-xs text-gray-400 text-center py-2">Nenhuma turma cadastrada</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            <div className="flex gap-3 mt-6">
-              <button 
-                onClick={handleSalvarEscola} 
-                disabled={salvando}
-                className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl hover:bg-indigo-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {salvando ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                    Salvando...
-                  </>
-                ) : (
-                  escolaEditando?.id ? 'Atualizar Escola' : 'Cadastrar Escola'
-                )}
-              </button>
-              {escolaEditando?.id && (
-                <button 
-                  onClick={() => handleExcluirEscola(escolaEditando.id)}
-                  className="px-6 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 transition font-medium"
-                >
-                  Excluir
-                </button>
-              )}
-            </div>
-          </div>
-        </Modal>
-
-        <Modal isOpen={!!visualizandoResultados} onClose={() => setVisualizandoResultados(null)} title={`Resultados: ${visualizandoResultados?.titulo || ''}`}>
+        {/* Modal de Resultados */}
+        <Modal isOpen={!!visualizandoResultados} onClose={() => { setVisualizandoResultados(null); setMostrarRelatorio(false) }} title={`Resultados: ${visualizandoResultados?.titulo || ''}`}>
           {resultados.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1267,49 +1387,19 @@ export default function AvaliacoesPage() {
             </div>
           ) : (
             <>
+              {/* Botão de impressão */}
               <div className="flex justify-end mb-4">
                 <button
                   onClick={handleImprimirRelatorio}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition"
+                  disabled={imprimindo}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
                 >
                   <Printer size={18} />
-                  Imprimir Relatório
+                  {imprimindo ? 'Preparando...' : 'Imprimir Relatório'}
                 </button>
               </div>
 
-              <div className="flex gap-2 border-b mb-6">
-                <button
-                  onClick={() => setAbas('geral')}
-                  className={`px-4 py-2 font-medium transition ${abas === 'geral' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                  <TrendingUp size={16} className="inline mr-2" />
-                  Resultados Gerais
-                </button>
-                {visualizandoResultados?.tipo_avaliacao === 'habilidades' && (
-                  <button
-                    onClick={() => setAbas('habilidades')}
-                    className={`px-4 py-2 font-medium transition ${abas === 'habilidades' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    <Target size={16} className="inline mr-2" />
-                    Resultados por Habilidade
-                  </button>
-                )}
-              </div>
-
-              <div className="flex flex-wrap gap-4 mb-6 p-4 bg-gray-50 rounded-xl">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Tipo de Gráfico</label>
-                  <select
-                    value={tipoGrafico}
-                    onChange={(e) => setTipoGrafico(e.target.value as TipoGrafico)}
-                    className="mt-1 p-2 border rounded-lg"
-                  >
-                    <option value="barra">Barras Verticais</option>
-                    <option value="pizza">Pizza (Setores)</option>
-                  </select>
-                </div>
-              </div>
-
+              {/* Filtros */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-xl">
                 <div>
                   <label className="text-sm font-medium text-gray-700">Escola</label>
@@ -1338,18 +1428,6 @@ export default function AvaliacoesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Disciplina</label>
-                  <select
-                    value={filtroDisciplina}
-                    onChange={(e) => setFiltroDisciplina(e.target.value)}
-                    className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="todas">Ambas</option>
-                    <option value="Língua Portuguesa">Língua Portuguesa</option>
-                    <option value="Matemática">Matemática</option>
-                  </select>
-                </div>
-                <div>
                   <label className="text-sm font-medium text-gray-700">Turma</label>
                   <select
                     value={filtroTurma}
@@ -1362,8 +1440,36 @@ export default function AvaliacoesPage() {
                     ))}
                   </select>
                 </div>
+                {visualizandoResultados?.tipo_avaliacao === 'niveis' ? (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Disciplina</label>
+                    <select
+                      value={filtroDisciplina}
+                      onChange={(e) => setFiltroDisciplina(e.target.value)}
+                      className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="todas">Ambas</option>
+                      <option value="Língua Portuguesa">Língua Portuguesa</option>
+                      <option value="Matemática">Matemática</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Disciplina (Habilidades)</label>
+                    <select
+                      value={filtroHabilidadeDisciplina}
+                      onChange={(e) => setFiltroHabilidadeDisciplina(e.target.value)}
+                      className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="todas">Todas</option>
+                      <option value="Língua Portuguesa">Língua Portuguesa</option>
+                      <option value="Matemática">Matemática</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
+              {/* Cards de totais */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-gray-800 rounded-xl p-4 text-center text-white">
                   <Users size={28} className="mx-auto mb-2 text-gray-300" />
@@ -1382,193 +1488,221 @@ export default function AvaliacoesPage() {
                 </div>
               </div>
 
-              {/* Cards de níveis por disciplina - CORRETO: sempre separado por disciplina, ignorando filtroDisciplina */}
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-700 mb-3 text-sm">Língua Portuguesa</h3>
-                <div className="grid grid-cols-4 gap-2 mb-4">
-                  <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-3 text-center">
-                    <div className="text-xl font-bold text-red-600">
-                      {resultados
-                        .filter(r => r.disciplina === 'Língua Portuguesa')
-                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
-                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
-                        .filter(r => !filtroTurma || r.turma === filtroTurma)
-                        .reduce((sum, r) => sum + r.nivel_insuficiente, 0)}
+              {/* CONTEÚDO PARA AVALIAÇÃO POR NÍVEIS */}
+              {visualizandoResultados?.tipo_avaliacao === 'niveis' && (
+                <>
+                  <div className="mb-6">
+                    <h3 className="font-semibold text-gray-700 mb-3 text-sm">Língua Portuguesa</h3>
+                    <div className="grid grid-cols-4 gap-2 mb-4">
+                      <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-3 text-center">
+                        <div className="text-xl font-bold text-red-600">{resultados.filter(r => r.disciplina === 'Língua Portuguesa').filter(r => !filtroEscola || r.escola_codigo === filtroEscola).filter(r => !filtroPeriodo || r.periodo === filtroPeriodo).filter(r => !filtroTurma || r.turma === filtroTurma).reduce((sum, r) => sum + r.nivel_insuficiente, 0)}</div>
+                        <div className="text-xs text-red-600 mt-1">Insuficiente</div>
+                      </div>
+                      <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-3 text-center">
+                        <div className="text-xl font-bold text-yellow-600">{resultados.filter(r => r.disciplina === 'Língua Portuguesa').filter(r => !filtroEscola || r.escola_codigo === filtroEscola).filter(r => !filtroPeriodo || r.periodo === filtroPeriodo).filter(r => !filtroTurma || r.turma === filtroTurma).reduce((sum, r) => sum + r.nivel_basico, 0)}</div>
+                        <div className="text-xs text-yellow-600 mt-1">Básico</div>
+                      </div>
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3 text-center">
+                        <div className="text-xl font-bold text-blue-600">{resultados.filter(r => r.disciplina === 'Língua Portuguesa').filter(r => !filtroEscola || r.escola_codigo === filtroEscola).filter(r => !filtroPeriodo || r.periodo === filtroPeriodo).filter(r => !filtroTurma || r.turma === filtroTurma).reduce((sum, r) => sum + r.nivel_proficiente, 0)}</div>
+                        <div className="text-xs text-blue-600 mt-1">Proficiente</div>
+                      </div>
+                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-3 text-center">
+                        <div className="text-xl font-bold text-green-600">{resultados.filter(r => r.disciplina === 'Língua Portuguesa').filter(r => !filtroEscola || r.escola_codigo === filtroEscola).filter(r => !filtroPeriodo || r.periodo === filtroPeriodo).filter(r => !filtroTurma || r.turma === filtroTurma).reduce((sum, r) => sum + r.nivel_avancado, 0)}</div>
+                        <div className="text-xs text-green-600 mt-1">Avançado</div>
+                      </div>
                     </div>
-                    <div className="text-xs text-red-600 mt-1">Insuficiente</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-3 text-center">
-                    <div className="text-xl font-bold text-yellow-600">
-                      {resultados
-                        .filter(r => r.disciplina === 'Língua Portuguesa')
-                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
-                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
-                        .filter(r => !filtroTurma || r.turma === filtroTurma)
-                        .reduce((sum, r) => sum + r.nivel_basico, 0)}
+                    <h3 className="font-semibold text-gray-700 mb-3 text-sm">Matemática</h3>
+                    <div className="grid grid-cols-4 gap-2">
+                      <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-3 text-center">
+                        <div className="text-xl font-bold text-red-600">{resultados.filter(r => r.disciplina === 'Matemática').filter(r => !filtroEscola || r.escola_codigo === filtroEscola).filter(r => !filtroPeriodo || r.periodo === filtroPeriodo).filter(r => !filtroTurma || r.turma === filtroTurma).reduce((sum, r) => sum + r.nivel_insuficiente, 0)}</div>
+                        <div className="text-xs text-red-600 mt-1">Insuficiente</div>
+                      </div>
+                      <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-3 text-center">
+                        <div className="text-xl font-bold text-yellow-600">{resultados.filter(r => r.disciplina === 'Matemática').filter(r => !filtroEscola || r.escola_codigo === filtroEscola).filter(r => !filtroPeriodo || r.periodo === filtroPeriodo).filter(r => !filtroTurma || r.turma === filtroTurma).reduce((sum, r) => sum + r.nivel_basico, 0)}</div>
+                        <div className="text-xs text-yellow-600 mt-1">Básico</div>
+                      </div>
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3 text-center">
+                        <div className="text-xl font-bold text-blue-600">{resultados.filter(r => r.disciplina === 'Matemática').filter(r => !filtroEscola || r.escola_codigo === filtroEscola).filter(r => !filtroPeriodo || r.periodo === filtroPeriodo).filter(r => !filtroTurma || r.turma === filtroTurma).reduce((sum, r) => sum + r.nivel_proficiente, 0)}</div>
+                        <div className="text-xs text-blue-600 mt-1">Proficiente</div>
+                      </div>
+                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-3 text-center">
+                        <div className="text-xl font-bold text-green-600">{resultados.filter(r => r.disciplina === 'Matemática').filter(r => !filtroEscola || r.escola_codigo === filtroEscola).filter(r => !filtroPeriodo || r.periodo === filtroPeriodo).filter(r => !filtroTurma || r.turma === filtroTurma).reduce((sum, r) => sum + r.nivel_avancado, 0)}</div>
+                        <div className="text-xs text-green-600 mt-1">Avançado</div>
+                      </div>
                     </div>
-                    <div className="text-xs text-yellow-600 mt-1">Básico</div>
                   </div>
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3 text-center">
-                    <div className="text-xl font-bold text-blue-600">
-                      {resultados
-                        .filter(r => r.disciplina === 'Língua Portuguesa')
-                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
-                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
-                        .filter(r => !filtroTurma || r.turma === filtroTurma)
-                        .reduce((sum, r) => sum + r.nivel_proficiente, 0)}
-                    </div>
-                    <div className="text-xs text-blue-600 mt-1">Proficiente</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-3 text-center">
-                    <div className="text-xl font-bold text-green-600">
-                      {resultados
-                        .filter(r => r.disciplina === 'Língua Portuguesa')
-                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
-                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
-                        .filter(r => !filtroTurma || r.turma === filtroTurma)
-                        .reduce((sum, r) => sum + r.nivel_avancado, 0)}
-                    </div>
-                    <div className="text-xs text-green-600 mt-1">Avançado</div>
-                  </div>
-                </div>
 
-                <h3 className="font-semibold text-gray-700 mb-3 text-sm">Matemática</h3>
-                <div className="grid grid-cols-4 gap-2">
-                  <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-3 text-center">
-                    <div className="text-xl font-bold text-red-600">
-                      {resultados
-                        .filter(r => r.disciplina === 'Matemática')
-                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
-                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
-                        .filter(r => !filtroTurma || r.turma === filtroTurma)
-                        .reduce((sum, r) => sum + r.nivel_insuficiente, 0)}
-                    </div>
-                    <div className="text-xs text-red-600 mt-1">Insuficiente</div>
+                  <div className="bg-white rounded-xl border p-6 mb-6">
+                    <h3 className="font-bold text-gray-800 mb-4">Distribuição por Nível de Proficiência</h3>
+                    <ResponsiveContainer width="100%" height={400}>
+                      <BarChart data={dadosGraficoNiveis()}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip formatter={(value) => `${value} alunos`} />
+                        <Legend />
+                        <Bar dataKey="value" name="Quantidade de Alunos" radius={[8, 8, 0, 0]}>
+                          {dadosGraficoNiveis().map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.cor} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
-                  <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-3 text-center">
-                    <div className="text-xl font-bold text-yellow-600">
-                      {resultados
-                        .filter(r => r.disciplina === 'Matemática')
-                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
-                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
-                        .filter(r => !filtroTurma || r.turma === filtroTurma)
-                        .reduce((sum, r) => sum + r.nivel_basico, 0)}
-                    </div>
-                    <div className="text-xs text-yellow-600 mt-1">Básico</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3 text-center">
-                    <div className="text-xl font-bold text-blue-600">
-                      {resultados
-                        .filter(r => r.disciplina === 'Matemática')
-                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
-                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
-                        .filter(r => !filtroTurma || r.turma === filtroTurma)
-                        .reduce((sum, r) => sum + r.nivel_proficiente, 0)}
-                    </div>
-                    <div className="text-xs text-blue-600 mt-1">Proficiente</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-3 text-center">
-                    <div className="text-xl font-bold text-green-600">
-                      {resultados
-                        .filter(r => r.disciplina === 'Matemática')
-                        .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
-                        .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
-                        .filter(r => !filtroTurma || r.turma === filtroTurma)
-                        .reduce((sum, r) => sum + r.nivel_avancado, 0)}
-                    </div>
-                    <div className="text-xs text-green-600 mt-1">Avançado</div>
-                  </div>
-                </div>
-              </div>
 
-              <div className="bg-white rounded-xl border p-6 mb-6">
-                <h3 className="font-bold text-gray-800 mb-4">
-                  {tipoGrafico === 'pizza' ? 'Distribuição por Nível de Proficiência' : 'Resultados por Nível'}
-                </h3>
-                
-                {tipoGrafico === 'pizza' ? (
-                  <ResponsiveContainer width="100%" height={400}>
-                    <PieChart>
-                      <Pie
-                        data={dadosGraficoNiveis().filter(entry => entry.percentual !== '0' && parseFloat(entry.percentual) > 0)}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={120}
-                        label={({ name, percent = 0 }) => percent > 0 ? `${name}: ${(percent * 100).toFixed(1)}%` : ''}
-                      >
-                        {dadosGraficoNiveis().map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.cor} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value, name) => [`${value} alunos`, name]} />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <ResponsiveContainer width="100%" height={400}>
-                    <BarChart data={dadosGraficoNiveis()}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip formatter={(value) => `${value} alunos`} />
-                      <Legend />
-                      <Bar dataKey="value" name="Quantidade de Alunos" radius={[8, 8, 0, 0]}>
-                        {dadosGraficoNiveis().map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.cor} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 sticky top-0">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Escola</th>
-                      <th className="px-4 py-3 text-left">Período</th>
-                      <th className="px-4 py-3 text-left">Turma</th>
-                      <th className="px-4 py-3 text-left">Disciplina</th>
-                      <th className="px-4 py-3 text-center">Matric.</th>
-                      <th className="px-4 py-3 text-center">Freq.</th>
-                      <th className="px-4 py-3 text-center">Aval.</th>
-                      <th className="px-4 py-3 text-center">Insuf.</th>
-                      <th className="px-4 py-3 text-center">Básico</th>
-                      <th className="px-4 py-3 text-center">Profic.</th>
-                      <th className="px-4 py-3 text-center">Avanç.</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {resultados
-                      .filter(r => !filtroEscola || r.escola_codigo === filtroEscola)
-                      .filter(r => !filtroPeriodo || r.periodo === filtroPeriodo)
-                      .filter(r => filtroDisciplina === 'todas' || r.disciplina === filtroDisciplina)
-                      .filter(r => !filtroTurma || r.turma === filtroTurma)
-                      .map((r, idx) => (
-                        <tr key={`${r.escola_codigo}-${r.periodo}-${r.turma}-${r.disciplina}-${idx}`} className="hover:bg-gray-50 transition">
-                          <td className="px-4 py-3 font-medium">{r.escola_nome}</td>
-                          <td className="px-4 py-3">{r.periodo}</td>
-                          <td className="px-4 py-3">{r.turma}</td>
-                          <td className="px-4 py-3">{r.disciplina}</td>
-                          <td className="px-4 py-3 text-center">{r.alunos_matriculados}</td>
-                          <td className="px-4 py-3 text-center">{r.alunos_frequentando || 0}</td>
-                          <td className="px-4 py-3 text-center">{r.alunos_avaliados}</td>
-                          <td className="px-4 py-3 text-center text-red-600">{r.nivel_insuficiente}</td>
-                          <td className="px-4 py-3 text-center text-yellow-600">{r.nivel_basico}</td>
-                          <td className="px-4 py-3 text-center text-blue-600">{r.nivel_proficiente}</td>
-                          <td className="px-4 py-3 text-center text-green-600">{r.nivel_avancado}</td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="px-4 py-3 text-left">Escola</th>
+                          <th className="px-4 py-3 text-left">Período</th>
+                          <th className="px-4 py-3 text-left">Turma</th>
+                          <th className="px-4 py-3 text-left">Disciplina</th>
+                          <th className="px-4 py-3 text-center">Matric.</th>
+                          <th className="px-4 py-3 text-center">Freq.</th>
+                          <th className="px-4 py-3 text-center">Aval.</th>
+                          <th className="px-4 py-3 text-center">Insuf.</th>
+                          <th className="px-4 py-3 text-center">Básico</th>
+                          <th className="px-4 py-3 text-center">Profic.</th>
+                          <th className="px-4 py-3 text-center">Avanç.</th>
                         </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {getResultadosFiltrados().map((r, idx) => (
+                          <tr key={`${r.escola_codigo}-${r.periodo}-${r.turma}-${r.disciplina}-${idx}`} className="hover:bg-gray-50 transition">
+                            <td className="px-4 py-3 font-medium">{r.escola_nome}</td>
+                            <td className="px-4 py-3">{r.periodo}</td>
+                            <td className="px-4 py-3">{r.turma}</td>
+                            <td className="px-4 py-3">{r.disciplina}</td>
+                            <td className="px-4 py-3 text-center">{r.alunos_matriculados}</td>
+                            <td className="px-4 py-3 text-center">{r.alunos_frequentando || 0}</td>
+                            <td className="px-4 py-3 text-center">{r.alunos_avaliados}</td>
+                            <td className="px-4 py-3 text-center text-red-600">{r.nivel_insuficiente}</td>
+                            <td className="px-4 py-3 text-center text-yellow-600">{r.nivel_basico}</td>
+                            <td className="px-4 py-3 text-center text-blue-600">{r.nivel_proficiente}</td>
+                            <td className="px-4 py-3 text-center text-green-600">{r.nivel_avancado}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* CONTEÚDO PARA AVALIAÇÃO POR HABILIDADES */}
+              {visualizandoResultados?.tipo_avaliacao === 'habilidades' && (
+                <>
+                  <div className="bg-white rounded-xl border p-6 mb-6">
+                    <h3 className="font-bold text-gray-800 mb-4">Percentual de Acerto por Habilidade</h3>
+                    <ResponsiveContainer width="100%" height={Math.max(400, dadosGraficoHabilidades().length * 40)}>
+                      <BarChart 
+                        data={dadosGraficoHabilidades()} 
+                        layout="vertical"
+                        margin={{ left: 150, right: 30, top: 20, bottom: 20 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
+                        <YAxis type="category" dataKey="codigo" width={140} />
+                        <Tooltip 
+                          formatter={(value: any) => [`${value.toFixed(1)}%`, 'Percentual de Acerto']}
+                          labelFormatter={(label) => {
+                            const hab = dadosGraficoHabilidades().find(h => h.codigo === label)
+                            return hab ? `${hab.codigo} - ${hab.descricao}` : label
+                          }}
+                        />
+                        <Bar dataKey="percentual" name="Percentual de Acerto" radius={[0, 8, 8, 0]}>
+                          {dadosGraficoHabilidades().map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.cor} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="mb-6">
+                    <h3 className="font-bold text-gray-800 mb-4">Resumo por Habilidade</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {dadosGraficoHabilidades().map((hab) => (
+                        <div key={hab.codigo} className="border rounded-xl p-3 hover:shadow-md transition">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="px-2 py-0.5 text-xs rounded-full font-medium" style={{ backgroundColor: hab.cor + '20', color: hab.cor }}>{hab.codigo}</span>
+                            <span className="text-xs text-gray-500">{hab.disciplina}</span>
+                          </div>
+                          <p className="text-sm text-gray-700 mb-2">{hab.descricao}</p>
+                          <div className="flex items-end gap-2">
+                            <span className="text-2xl font-bold" style={{ color: hab.cor }}>{hab.percentual.toFixed(1)}%</span>
+                            <span className="text-xs text-gray-500 mb-1">de acerto</span>
+                          </div>
+                          <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                            <div className="h-2 rounded-full transition-all duration-500" style={{ width: `${hab.percentual}%`, backgroundColor: hab.cor }} />
+                          </div>
+                        </div>
                       ))}
-                  </tbody>
-                </table>
-              </div>
+                    </div>
+                  </div>
+
+                  <div className="mb-6">
+                    <h3 className="font-bold text-gray-800 mb-4">Resultados por Turma</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="px-4 py-3 text-left">Escola</th>
+                            <th className="px-4 py-3 text-left">Período</th>
+                            <th className="px-4 py-3 text-left">Turma</th>
+                            <th className="px-4 py-3 text-center">Matric.</th>
+                            <th className="px-4 py-3 text-center">Freq.</th>
+                            <th className="px-4 py-3 text-center">Aval.</th>
+                            {dadosGraficoHabilidades().map(hab => (
+                              <th key={hab.codigo} className="px-3 py-3 text-center text-xs" title={hab.descricao}>{hab.codigo}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {getDadosHabilidadesPorTurma().map((r, idx) => (
+                            <tr key={`${r.escola_codigo}-${r.periodo}-${r.turma}-${idx}`} className="hover:bg-gray-50 transition">
+                              <td className="px-4 py-3 font-medium">{r.escola_nome}</td>
+                              <td className="px-4 py-3">{r.periodo}</td>
+                              <td className="px-4 py-3">{r.turma}</td>
+                              <td className="px-4 py-3 text-center">{r.alunos_matriculados}</td>
+                              <td className="px-4 py-3 text-center">{r.alunos_frequentando || 0}</td>
+                              <td className="px-4 py-3 text-center">{r.alunos_avaliados}</td>
+                              {dadosGraficoHabilidades().map(hab => {
+                                const habData = r.habilidades?.[hab.codigo]
+                                const percentual = habData?.percentual || 0
+                                return (
+                                  <td key={hab.codigo} className="px-3 py-3 text-center">
+                                    <span className="font-medium" style={{ color: hab.cor }}>{percentual.toFixed(0)}%</span>
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <h4 className="font-semibold text-gray-700 mb-2">Legenda das Habilidades</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {dadosGraficoHabilidades().map(hab => (
+                        <div key={hab.codigo} className="flex items-center gap-2 text-sm">
+                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: hab.cor }}></span>
+                          <span className="font-medium">{hab.codigo}</span>
+                          <span className="text-gray-500">- {hab.descricao}</span>
+                          <span className="text-gray-400 text-xs">({hab.disciplina})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           )}
         </Modal>
 
+        {/* Modal de Códigos */}
         <Modal isOpen={!!mostrarCodigos} onClose={() => setMostrarCodigos(null)} title={`Códigos de Acesso - ${mostrarCodigos?.titulo || ''}`}>
           <div className="space-y-4">
             <div className="bg-blue-50 rounded-xl p-4">
@@ -1576,7 +1710,6 @@ export default function AvaliacoesPage() {
                 📋 Distribua os códigos abaixo para cada escola. Cada código permite acesso único para inserção dos resultados.
               </p>
             </div>
-            
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -1613,6 +1746,7 @@ export default function AvaliacoesPage() {
           </div>
         </Modal>
 
+        {/* Modal de Nova/Editar Avaliação */}
         <Modal isOpen={mostrarFormulario} onClose={resetForm} title={editandoId ? 'Editar Avaliação' : 'Nova Avaliação'}>
           <div className="space-y-4 text-slate-700">
             {erroSalvar && (
@@ -1624,37 +1758,17 @@ export default function AvaliacoesPage() {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Ano</label>
-              <input
-                type="number"
-                value={formData.ano}
-                onChange={(e) => setFormData({ ...formData, ano: parseInt(e.target.value) || new Date().getFullYear() })}
-                className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                min={2000}
-                max={new Date().getFullYear() + 1}
-              />
+              <input type="number" value={formData.ano} onChange={(e) => setFormData({ ...formData, ano: parseInt(e.target.value) || new Date().getFullYear() })} className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent" min={2000} max={new Date().getFullYear() + 1} />
             </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Título da Avaliação</label>
-              <input
-                type="text"
-                value={formData.titulo}
-                onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-                className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="Ex: Avaliação Diagnóstica - 1º Semestre 2024"
-              />
+              <input type="text" value={formData.titulo} onChange={(e) => setFormData({ ...formData, titulo: e.target.value })} className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="Ex: Avaliação Diagnóstica - 1º Semestre 2024" />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Avaliação</label>
-              <select
-                value={formData.tipo_avaliacao}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  tipo_avaliacao: e.target.value as 'niveis' | 'habilidades'
-                })}
-                className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500"
-              >
+              <select value={formData.tipo_avaliacao} onChange={(e) => setFormData({ ...formData, tipo_avaliacao: e.target.value as 'niveis' | 'habilidades', habilidades_selecionadas: {} })} className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500">
                 <option value="niveis">Avaliação por Níveis de Proficiência</option>
                 <option value="habilidades">Avaliação por Habilidades</option>
               </select>
@@ -1662,53 +1776,174 @@ export default function AvaliacoesPage() {
 
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={formData.ativa}
-                  onChange={(e) => setFormData({ ...formData, ativa: e.target.checked })}
-                  className="w-4 h-4 text-indigo-600"
-                />
+                <input type="checkbox" checked={formData.ativa} onChange={(e) => setFormData({ ...formData, ativa: e.target.checked })} className="w-4 h-4 text-indigo-600" />
                 <span className="text-sm text-gray-700">Avaliação Ativa</span>
               </label>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Data Limite para Inserção (opcional)</label>
-              <input
-                type="date"
-                value={formData.data_limite_insercao}
-                onChange={(e) => setFormData({ ...formData, data_limite_insercao: e.target.value })}
-                className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
+              <input type="date" value={formData.data_limite_insercao} onChange={(e) => setFormData({ ...formData, data_limite_insercao: e.target.value })} className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+            </div>
+
+            {formData.tipo_avaliacao === 'habilidades' && (
+              <div className="border-t pt-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Target size={20} className="text-purple-600" />
+                  <label className="text-lg font-semibold text-gray-800">Seleção de Habilidades</label>
+                  <span title="Selecione as habilidades que farão parte desta avaliação.">
+                    <HelpCircle size={16} className="text-gray-400"  />
+                  </span>
+                  
+                </div>
+                
+                <div className="bg-purple-50 rounded-xl p-4 mb-4">
+                  <p className="text-sm text-purple-700">Selecione as habilidades que serão avaliadas em cada período. Os professores só poderão inserir resultados para as habilidades selecionadas.</p>
+                </div>
+
+                {PERIODOS.map((periodo) => {
+                  const habilidadesPeriodo = HABILIDADES_FIXAS.filter(h => h.periodo === periodo)
+                  if (habilidadesPeriodo.length === 0) return null
+                  const selecionadas = formData.habilidades_selecionadas[periodo] || []
+                  
+                  return (
+                    <div key={periodo} className="mb-6 border rounded-xl p-4 bg-white">
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className="font-semibold text-gray-700">{periodo}</h3>
+                        <div className="flex gap-2">
+                          <button onClick={() => selecionarTodasHabilidadesPeriodo(periodo)} className="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-200">Selecionar Todas</button>
+                          <button onClick={() => limparHabilidadesPeriodo(periodo)} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-gray-200">Limpar</button>
+                        </div>
+                      </div>
+
+                      {habilidadesPeriodo.filter(h => h.disciplina === 'Língua Portuguesa').length > 0 && (
+                        <div className="mb-3">
+                          <h4 className="text-sm font-medium text-blue-600 mb-2">Língua Portuguesa</h4>
+                          <div className="space-y-2">
+                            {habilidadesPeriodo.filter(h => h.disciplina === 'Língua Portuguesa').map((habilidade) => (
+                              <label key={habilidade.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+                                <input type="checkbox" checked={selecionadas.includes(habilidade.id)} onChange={() => toggleHabilidadeSelecionada(periodo, habilidade.id)} className="w-4 h-4 text-indigo-600 rounded" />
+                                <div>
+                                  <span className="text-sm font-medium text-gray-700">{habilidade.codigo}</span>
+                                  <span className="text-sm text-gray-500 ml-2">- {habilidade.descricao}</span>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {habilidadesPeriodo.filter(h => h.disciplina === 'Matemática').length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-medium text-purple-600 mb-2">Matemática</h4>
+                          <div className="space-y-2">
+                            {habilidadesPeriodo.filter(h => h.disciplina === 'Matemática').map((habilidade) => (
+                              <label key={habilidade.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+                                <input type="checkbox" checked={selecionadas.includes(habilidade.id)} onChange={() => toggleHabilidadeSelecionada(periodo, habilidade.id)} className="w-4 h-4 text-indigo-600 rounded" />
+                                <div>
+                                  <span className="text-sm font-medium text-gray-700">{habilidade.codigo}</span>
+                                  <span className="text-sm text-gray-500 ml-2">- {habilidade.descricao}</span>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {selecionadas.length > 0 && (
+                        <div className="mt-3 pt-3 border-t">
+                          <p className="text-xs text-gray-500">{selecionadas.length} habilidade(s) selecionada(s) neste período</p>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {Object.values(formData.habilidades_selecionadas).flat().length > 0 && (
+                  <div className="bg-green-50 rounded-xl p-4">
+                    <p className="text-sm text-green-700">Total de {Object.values(formData.habilidades_selecionadas).flat().length} habilidade(s) selecionada(s) para esta avaliação.</p>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div className="flex gap-3 mt-6">
+              <button onClick={handleSalvarAvaliacao} disabled={salvando} className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl hover:bg-indigo-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                {salvando ? <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>Salvando...</> : (editandoId ? 'Atualizar' : 'Salvar')}
+              </button>
+              <button onClick={resetForm} className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition font-medium">Cancelar</button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Modal de Gerenciar Escolas */}
+        <Modal isOpen={mostrarGerenciarEscolas} onClose={() => { setMostrarGerenciarEscolas(false); setEscolaEditando(null); setErroSalvar(null) }} title={escolaEditando?.id ? 'Editar Escola' : 'Nova Escola'}>
+          <div className="space-y-4">
+            {erroSalvar && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2">
+                <AlertCircle size={18} className="text-red-500 mt-0.5 shrink-0" />
+                <div className="text-sm text-red-700">{erroSalvar}</div>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Código da Escola</label>
+                <input type="text" value={escolaEditando?.codigo || ''} onChange={(e) => setEscolaEditando(prev => prev ? { ...prev, codigo: e.target.value.toUpperCase() } : null)} className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500" placeholder="Ex: ESC001" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nome da Escola</label>
+                <input type="text" value={escolaEditando?.nome || ''} onChange={(e) => setEscolaEditando(prev => prev ? { ...prev, nome: e.target.value } : null)} className="w-full p-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500" placeholder="Ex: EMEB Dr. Gustavo Paiva" />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={escolaEditando?.ativa || false} onChange={(e) => setEscolaEditando(prev => prev ? { ...prev, ativa: e.target.checked } : null)} className="w-4 h-4 text-indigo-600" />
+                <span className="text-sm text-gray-700">Escola Ativa</span>
+              </label>
+            </div>
+
+            <div className="border-t pt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-3">Turmas por Período</label>
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {PERIODOS.map((periodo) => (
+                  <div key={periodo} className="border rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-medium">{periodo}</span>
+                      <button onClick={() => adicionarTurma(periodo)} className="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-200">+ Adicionar Turma</button>
+                    </div>
+                    <div className="space-y-2">
+                      {(escolaEditando?.turmas[periodo] || []).map((turma, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <input type="text" value={turma} onChange={(e) => { const novasTurmas = [...(escolaEditando?.turmas[periodo] || [])]; novasTurmas[idx] = e.target.value; atualizarTurmasEscola(periodo, novasTurmas) }} className="flex-1 p-2 border rounded-lg text-sm" />
+                          <button onClick={() => removerTurma(periodo, idx)} className="text-red-500 hover:text-red-700"><X size={16} /></button>
+                        </div>
+                      ))}
+                      {(escolaEditando?.turmas[periodo] || []).length === 0 && (
+                        <p className="text-xs text-gray-400 text-center py-2">Nenhuma turma cadastrada</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
             
             <div className="flex gap-3 mt-6">
-              <button 
-                onClick={handleSalvarAvaliacao} 
-                disabled={salvando}
-                className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl hover:bg-indigo-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {salvando ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                    Salvando...
-                  </>
-                ) : (
-                  editandoId ? 'Atualizar' : 'Salvar'
-                )}
+              <button onClick={handleSalvarEscola} disabled={salvando} className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl hover:bg-indigo-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                {salvando ? <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>Salvando...</> : (escolaEditando?.id ? 'Atualizar Escola' : 'Cadastrar Escola')}
               </button>
-              <button 
-                onClick={resetForm} 
-                className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition font-medium"
-              >
-                Cancelar
-              </button>
+              {escolaEditando?.id && (
+                <button onClick={() => handleExcluirEscola(escolaEditando.id)} className="px-6 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 transition font-medium">Excluir</button>
+              )}
             </div>
           </div>
         </Modal>
       </div>
 
-      {mostrarRelatorio && visualizandoResultados && <RelatorioDiagnostico />}
+      {/* Relatórios de impressão (renderizados fora da tela) */}
+      {mostrarRelatorio && visualizandoResultados && visualizandoResultados.tipo_avaliacao === 'niveis' && <RelatorioNiveis />}
+      {mostrarRelatorio && visualizandoResultados && visualizandoResultados.tipo_avaliacao === 'habilidades' && <RelatorioHabilidades />}
     </div>
   )
 }

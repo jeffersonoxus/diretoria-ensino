@@ -13,12 +13,12 @@ import {
   Menu, 
   X, 
   ShieldUser,
-  Stethoscope, // Para Diagnóstica
-  FileSpreadsheet, // Para Avaliações
+  FileSpreadsheet,
   GraduationCap,
   ClipboardCheck,
   Smartphone
 } from 'lucide-react';
+import { useSetorEJA } from '@/hooks/useSetorEJA'
 
 interface User {
   email?: string
@@ -33,16 +33,19 @@ export const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [perfil, setPerfil] = useState<{ id: string; nome: string } | null>(null)
+  const [temSetor, setTemSetor] = useState(false)
+  const [loadingSetor, setLoadingSetor] = useState(true)
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
 
+  const { isSetorEJA, loading: loadingSetorEJA } = useSetorEJA()
+
   // ============================================
   // VERIFICAÇÃO DE ROTA - SIDEBAR NÃO APARECE EM ROTAS ESPECÍFICAS
   // ============================================
-  const hideSidebarRoutes = ['/login', '/cadastro', '/callback']
+  const hideSidebarRoutes = ['/', '/login', '/cadastro', '/callback']
   
-  // Se estiver em uma rota que não deve ter sidebar, não renderiza nada
   if (hideSidebarRoutes.includes(pathname || '')) {
     return null
   }
@@ -52,7 +55,6 @@ export const Sidebar = () => {
     getUser()
     getPerfil()
     
-    // Verificar se é mobile
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768)
     }
@@ -62,6 +64,24 @@ export const Sidebar = () => {
     
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
+
+  // Verificar se o usuário está em algum setor
+  useEffect(() => {
+    const verificarSetor = async () => {
+      if (perfil?.id) {
+        setLoadingSetor(true)
+        const { data } = await supabase
+          .from('setores')
+          .select('id')
+          .contains('pessoas', [perfil.id])
+        setTemSetor((data?.length || 0) > 0)
+        setLoadingSetor(false)
+      } else {
+        setLoadingSetor(false)
+      }
+    }
+    verificarSetor()
+  }, [perfil, supabase])
 
   const getUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -91,29 +111,37 @@ export const Sidebar = () => {
   // Verificar se o usuário é admin
   const isAdmin = user?.email === 'admin@exemplo.com' || user?.email === 'jeffersonoxus@gmail.com'
 
-  // Verificar se o usuário está em algum setor (para mostrar o app mobile)
-  const [temSetor, setTemSetor] = useState(false)
-  
-  useEffect(() => {
-    const verificarSetor = async () => {
-      if (perfil?.id) {
-        const { data } = await supabase
-          .from('setores')
-          .select('id')
-          .contains('pessoas', [perfil.id])
-        setTemSetor((data?.length || 0) > 0)
-      }
+  // Definir quais menus mostrar baseado se o usuário tem setor
+  const getMenuItems = () => {
+    // ADMIN: mostra todos os menus (mesmo sem setor)
+    if (isAdmin) {
+      return [
+        { href: '/dien', icon: Home, label: 'Dashboard', show: true },
+        { href: '/dien/perfil', icon: User, label: 'Meu Perfil', show: true },
+        { href: '/dien/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
+        { href: '/dien/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
+        { href: '/app', icon: Smartphone, label: 'App Mobile', show: temSetor, external: true },
+      ]
     }
-    verificarSetor()
-  }, [perfil])
+    
+    // Se NÃO tem setor, mostra APENAS o perfil
+    if (!temSetor && !loadingSetor) {
+      return [
+        { href: '/dien/perfil', icon: User, label: 'Meu Perfil', show: true }
+      ]
+    }
 
-  const menuItems = [
-    { href: '/dien', icon: Home, label: 'Dashboard', show: true },
-    { href: '/dien/perfil', icon: User, label: 'Meu Perfil', show: true },
-    { href: '/dien/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
-    { href: '/dien/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: true },
-    { href: '/app', icon: Smartphone, label: 'App Mobile', show: temSetor, external: true },
-  ];
+    // Se TEM setor, mostra todos os menus normais
+    return [
+      { href: '/dien', icon: Home, label: 'Dashboard', show: true },
+      { href: '/dien/perfil', icon: User, label: 'Meu Perfil', show: true },
+      { href: '/dien/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
+      { href: '/dien/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
+      { href: '/app', icon: Smartphone, label: 'App Mobile', show: temSetor, external: true },
+    ]
+  }
+
+  const menuItems = getMenuItems()
 
   const toggleSidebar = () => {
     setIsOpen(!isOpen)
@@ -125,12 +153,29 @@ export const Sidebar = () => {
     }
   }
 
-  // Obter iniciais do email para avatar
   const getInitials = () => {
     if (user?.email) {
       return user.email.substring(0, 2).toUpperCase()
     }
     return 'U'
+  }
+
+  // Loading enquanto verifica setor
+  if (loadingSetor) {
+    return (
+      <>
+        {isMobile && (
+          <button className="fixed top-4 left-4 z-50 p-2 bg-[#7114dd] text-white rounded-lg md:hidden shadow-lg">
+            <Menu className="h-6 w-6" />
+          </button>
+        )}
+        <aside className="fixed top-0 left-0 h-full w-72 bg-white shadow-xl z-50">
+          <div className="flex items-center justify-center h-full">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7114dd]"></div>
+          </div>
+        </aside>
+      </>
+    )
   }
 
   return (
@@ -163,16 +208,15 @@ export const Sidebar = () => {
         `}
       >
         <div className="flex flex-col h-full">
-          {/* Header com logo e botão fechar - AGORA CLICÁVEL */}
+          {/* Header com logo */}
           <div className="p-5 border-b bg-linear-to-r from-[#7114dd]/5 to-[#a94dff]/5">
             <div className="flex items-center justify-between">
-              {/* Logo clicável para voltar à página inicial */}
               <Link 
                 href="/" 
                 onClick={closeSidebar}
                 className="flex items-center gap-2 group cursor-pointer hover:opacity-80 transition-opacity"
               >
-                <div className="w-10 h-10 bg-linear-to-br from-[#7114dd] to-[#a94dff] rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
+                <div className="w-10 h-10 bg-linear-to-br from-[#7114dd] to-[#a94dff] rounded-xl flex items-center justify-center shadow-md">
                   <GraduationCap className="w-6 h-6 text-white" />
                 </div>
                 <div>
@@ -195,7 +239,6 @@ export const Sidebar = () => {
           {/* Info do usuário */}
           <div className="p-5 border-b bg-gray-50">
             <div className="flex items-center space-x-3">
-              {/* Avatar com iniciais */}
               <div className="w-12 h-12 bg-linear-to-br from-[#7114dd] to-[#a94dff] rounded-full flex items-center justify-center shrink-0 shadow-md">
                 {user?.user_metadata?.avatar_url ? (
                   <img 
@@ -217,9 +260,9 @@ export const Sidebar = () => {
                 <p className="text-xs text-gray-500 truncate">
                   {user?.email || 'Carregando...'}
                 </p>
-                {perfil && (
-                  <p className="text-xs text-[#7114dd] mt-1">
-                    ID: {perfil.id.substring(0, 8)}...
+                {!temSetor && !isAdmin && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    ⚠️ Sem vínculo com setor
                   </p>
                 )}
               </div>
@@ -258,7 +301,7 @@ export const Sidebar = () => {
                 )
               })}
               
-              {/* Seção Admin separada */}
+              {/* Seção Admin separada - só aparece se for admin */}
               {isAdmin && (
                 <>
                   <div className="pt-4 mt-4 border-t">

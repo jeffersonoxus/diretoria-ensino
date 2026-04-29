@@ -3,27 +3,12 @@
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { 
-  Plus, 
-  Pencil, 
-  Trash2, 
-  Calendar, 
-  MapPin, 
-  Truck,
-  Car,
-  X,
-  Users,
-  Eye,
-  Filter,
-  Building2,
-  AlertCircle,
-  CheckCircle,
-  List,
-  ChevronDown,
-  ChevronUp
+  Plus, Pencil, Trash2, Calendar, MapPin, Truck, Car, X, Users, Eye, 
+  Filter, Building2, AlertCircle, CheckCircle, List, ChevronDown, ChevronUp, 
+  Clock, EyeOff, Eye as EyeIcon, User, CalendarDays, Clock as ClockIcon
 } from "lucide-react"
 
 // --- Interfaces ---
-
 interface Usuario {
   id: string
   nome: string
@@ -59,6 +44,14 @@ interface Setor {
   pessoas: string[]
 }
 
+interface Local {
+  id: string
+  nome: string
+  tipo: string
+  endereco?: string
+  ativo: boolean
+}
+
 interface ParametroExtra {
   id: string
   label: string
@@ -73,128 +66,89 @@ interface TipoAcao {
   parametros_extras: ParametroExtra[]
 }
 
-// Opções estáticas
-const ESCOLAS_OPCOES = [
-  "EMEB Dalmario Souza",
-  "EMEB Dr. Gustavo Paiva",
-  "EMEB João Paulo II",
-  "EMEB José Bonifácio de Andrada e Silva",
-  "EMEB Lápis de Cor",
-  "EMEB Marieta Leão",
-  "EMEB Professor Givaldo Moraes Sarmento",
-  "EMEB Professor José Carlos da Silva",
-  "EMEB Professor Pompeu Sarmento",
-  "EMEB Professora Iete Melo Mathias",
-  "EMEB Renato Jarsen de Melo",
-  "EMEB Teresa Cristina Lins de Souza Costa",
-  "EMEF Industrial Luigi Bauducco",
-  "EMEF Machado de Assis",
-  "EMEF Manoel Soares de Souza",
-  "EMEF Prefeito Antonio Lins de Souza",
-  "EMEF Professor José Edmilson de Souza",
-  "EMEF Professora Emilia Milones",
-  "Escola Municipal de Ensino Fundamental Dr. Gastão Oiticica",
-  "Escola Municipal de Ensino Fundamental Manoel Gonçalves da Silva",
-  "Escola Municipal de Ensino Fundamental Odylo Alvares de Souza"
-]
+interface TimeOption {
+  hora: string
+  minuto: string
+  label: string
+}
 
-const STATUS_OPCOES = [
-  'Pendente', 
-  'Realizada', 
-  'Realizada Parcialmente', 
-  'Cancelada', 
-  'Reagendada'
-]
+const STATUS_OPCOES = ['Pendente', 'Realizada', 'Realizada Parcialmente', 'Cancelada', 'Reagendada']
 
-// --- Funções de data com fuso horário local corrigido ---
+// Gerar opções de horário (06:00 às 21:00)
+const timeOptions: TimeOption[] = []
+for (let hora = 6; hora <= 21; hora++) {
+  const horaStr = String(hora).padStart(2, '0')
+  timeOptions.push({ hora: horaStr, minuto: '00', label: `${horaStr}:00` })
+  timeOptions.push({ hora: horaStr, minuto: '30', label: `${horaStr}:30` })
+}
 
-// Converter data local para UTC ao salvar no banco
+// Funções de data
 const formatarDataParaBanco = (dataLocal: string): string => {
   if (!dataLocal) return ''
-  
   const [datePart, timePart] = dataLocal.split('T')
+  if (!datePart || !timePart) return ''
   const [ano, mes, dia] = datePart.split('-')
   const [horas, minutos] = timePart.split(':')
-  
-  // Criar objeto Date no fuso local
-  const dataLocalObj = new Date(
-    parseInt(ano), 
-    parseInt(mes) - 1, 
-    parseInt(dia), 
-    parseInt(horas), 
-    parseInt(minutos)
-  )
-  
-  // Converter para ISO string (UTC) para salvar no banco
+  const dataLocalObj = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia), parseInt(horas), parseInt(minutos))
   return dataLocalObj.toISOString()
 }
 
-// Converter data UTC do banco para exibição local no input
 const formatarDataParaExibicao = (dataUTC: string): string => {
   if (!dataUTC) return ''
-  
   const dataObj = new Date(dataUTC)
-  
-  const ano = dataObj.getFullYear()
-  const mes = String(dataObj.getMonth() + 1).padStart(2, '0')
-  const dia = String(dataObj.getDate()).padStart(2, '0')
-  const horas = String(dataObj.getHours()).padStart(2, '0')
-  const minutos = String(dataObj.getMinutes()).padStart(2, '0')
-  
-  return `${ano}-${mes}-${dia}T${horas}:${minutos}`
+  if (isNaN(dataObj.getTime())) return ''
+  return `${dataObj.getFullYear()}-${String(dataObj.getMonth() + 1).padStart(2, '0')}-${String(dataObj.getDate()).padStart(2, '0')}T${String(dataObj.getHours()).padStart(2, '0')}:${String(dataObj.getMinutes()).padStart(2, '0')}`
 }
 
-// Para exibir nas listas (já no horário local)
 const formatarDataParaExibicaoLista = (dataUTC: string): string => {
   if (!dataUTC) return ''
   const dataObj = new Date(dataUTC)
-  return dataObj.toLocaleString('pt-BR')
+  if (isNaN(dataObj.getTime())) return ''
+  return dataObj.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
-// Componente de input com minutos limitados a 0 e 30
-const DateTimeLocalInput = ({ 
-  value, 
-  onChange, 
-  label,
-  required = false
-}: { 
-  value: string, 
-  onChange: (value: string) => void, 
-  label: string,
-  required?: boolean
-}) => {
+// Componente de input de data
+const DateOnlyInput = ({ value, onChange, label, required = false }: { value: string, onChange: (value: string) => void, label: string, required?: boolean }) => {
   const [dateValue, setDateValue] = useState('')
-  const [timeValue, setTimeValue] = useState('')
+  const [timeValue, setTimeValue] = useState('08:00')
 
   useEffect(() => {
     if (value) {
       const [datePart, timePart] = value.split('T')
       setDateValue(datePart || '')
-      if (timePart) {
-        const [hours, minutes] = timePart.split(':')
-        // Arredondar para 0 ou 30 minutos
-        const roundedMinutes = parseInt(minutes) < 15 ? '00' : '30'
-        setTimeValue(`${hours}:${roundedMinutes}`)
-      }
+      if (timePart) setTimeValue(timePart)
+      else setTimeValue('08:00')
+    } else {
+      setDateValue('')
+      setTimeValue('08:00')
     }
   }, [value])
 
-  const handleDateTimeChange = (date: string, time: string) => {
-    if (date && time) {
-      onChange(`${date}T${time}`)
-    } else if (date) {
-      onChange(`${date}T00:00`)
-    } else {
-      onChange('')
+  const handleDateChange = (date: string) => {
+    setDateValue(date)
+    if (date && timeValue) {
+      onChange(`${date}T${timeValue}`)
     }
   }
 
-  // Gerar opções de horário (00:00, 00:30, 01:00, 01:30, ..., 23:00, 23:30)
-  const timeOptions = []
-  for (let hora = 0; hora < 24; hora++) {
-    const horaStr = String(hora).padStart(2, '0')
-    timeOptions.push({ hora: horaStr, minuto: '00', label: `${horaStr}:00` })
-    timeOptions.push({ hora: horaStr, minuto: '30', label: `${horaStr}:30` })
+  const handleTimeChange = (time: string) => {
+    setTimeValue(time)
+    if (dateValue && time) {
+      onChange(`${dateValue}T${time}`)
+    }
+  }
+
+  const openCalendar = () => {
+    const dateInput = document.getElementById(`${label.replace(/\s/g, '')}-date-input`)
+    if (dateInput) {
+      (dateInput as HTMLInputElement).showPicker()
+    }
   }
 
   return (
@@ -202,24 +156,27 @@ const DateTimeLocalInput = ({
       <label className="block text-sm font-bold text-gray-700">
         {label} {required && '*'}
       </label>
-      <div className="grid grid-cols-2 gap-2">
-        <input
-          type="date"
-          value={dateValue}
-          onChange={(e) => handleDateTimeChange(e.target.value, timeValue)}
-          className="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
-          required={required}
-        />
+      <div className="flex gap-2">
+        <div 
+          className="relative flex-1 cursor-pointer"
+          onClick={openCalendar}
+        >
+          <input
+            id={`${label.replace(/\s/g, '')}-date-input`}
+            type="date"
+            value={dateValue}
+            onChange={(e) => handleDateChange(e.target.value)}
+            className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer bg-white"
+          />
+          <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-purple-500 pointer-events-none" size={18} />
+        </div>
         <select
           value={timeValue}
-          onChange={(e) => handleDateTimeChange(dateValue, e.target.value)}
-          className="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
+          onChange={(e) => handleTimeChange(e.target.value)}
+          className="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
         >
-          <option value="">Selecione horário</option>
-          {timeOptions.map(({ hora, minuto, label }) => (
-            <option key={`${hora}:${minuto}`} value={`${hora}:${minuto}`}>
-              {label}
-            </option>
+          {timeOptions.map((option) => (
+            <option key={option.label} value={option.label}>{option.label}</option>
           ))}
         </select>
       </div>
@@ -233,20 +190,21 @@ export default function AcoesPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [setores, setSetores] = useState<Setor[]>([])
   const [tiposAcoes, setTiposAcoes] = useState<TipoAcao[]>([])
+  const [locais, setLocais] = useState<Local[]>([])
   const [userPerfilId, setUserPerfilId] = useState<string | null>(null)
   const [userNome, setUserNome] = useState<string>('')
   const [userEmail, setUserEmail] = useState<string>('')
   const [userSetoresIds, setUserSetoresIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [editandoAcao, setEditandoAcao] = useState<Acao | null>(null)
   const [formExpandido, setFormExpandido] = useState(true)
   const [setorSelecionado, setSetorSelecionado] = useState<string | null>(null)
-  const [setorConfirmado, setSetorConfirmado] = useState(false)
   const [mostrarListaAcoes, setMostrarListaAcoes] = useState(false)
-  const [animacaoPulse, setAnimacaoPulse] = useState(true)
+  const [mostrarCamposPersonalizados, setMostrarCamposPersonalizados] = useState(false)
+  const [mostrarMaisAcoes, setMostrarMaisAcoes] = useState(false)
+  const [acoesVisiveis, setAcoesVisiveis] = useState<Acao[]>([])
   
-  // --- Estado do Formulário ---
+  // Form State
   const [descricao, setDescricao] = useState('')
   const [pessoas, setPessoas] = useState<string[]>([])
   const [setoresSelecionados, setSetoresSelecionados] = useState<string[]>([])
@@ -259,287 +217,243 @@ export default function AcoesPage() {
   const [dadosExtras, setDadosExtras] = useState<Record<string, any>>({})
   const [observacoes, setObservacoes] = useState('')
 
-  // Buscar perfil do usuário atual
-  const getCurrentUserPerfil = async (): Promise<string | null> => {
+  // Carregar dados iniciais
+  useEffect(() => {
+    const init = async () => {
+      setLoading(true)
+      await fetchSetores()
+      await fetchTiposAcoes()
+      await fetchLocais()
+      await getCurrentUserPerfil()
+      setLoading(false)
+    }
+    init()
+  }, [])
+
+  useEffect(() => {
+    if (userPerfilId && userSetoresIds.length > 0) {
+      fetchAcoes()
+      carregarTodosUsuarios()
+      if (userSetoresIds.length === 1 && !setorSelecionado) {
+        const setorId = userSetoresIds[0]
+        setSetorSelecionado(setorId)
+        carregarPessoasDoSetor(setorId)
+      }
+    }
+  }, [userPerfilId, userSetoresIds])
+
+  useEffect(() => {
+    const now = new Date()
+    const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1)
+    const fimMes = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    
+    const acoesDoMes = acoes.filter(acao => {
+      const dataAcao = new Date(acao.created_at)
+      return dataAcao >= inicioMes && dataAcao <= fimMes
+    })
+    
+    setAcoesVisiveis(mostrarMaisAcoes ? acoes.slice(0, 50) : acoesDoMes.slice(0, 10))
+  }, [acoes, mostrarMaisAcoes])
+
+  const getCurrentUserPerfil = async () => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError) {
-        console.error("❌ Erro ao buscar usuário:", userError)
-        throw userError
-      }
-      if (!user) {
-        console.log("❌ Nenhum usuário logado")
-        return null
-      }
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
       
-      console.log("✅ Usuário logado:", user.email)
-      console.log("📋 User ID:", user.id)
+      setUserEmail(user.email || '')
       
-      const { data: perfil, error: perfilError } = await supabase
+      const { data: perfil } = await supabase
         .from('perfis')
-        .select('id, nome')
+        .select('id, nome, email')
         .eq('email', user.email)
         .single()
       
-      let perfilId = null
-      let perfilNome = ''
-      
-      if (perfilError) {
-        console.error("❌ Erro ao buscar perfil:", perfilError)
-        if (perfilError.code === 'PGRST116') {
-          console.log("📝 Perfil não encontrado, criando novo perfil...")
-          const novoPerfil = {
-            id: user.id,
-            nome: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário',
-            email: user.email
-          }
-          
-          const { data: novoPerfilData, error: createError } = await supabase
-            .from('perfis')
-            .insert([novoPerfil])
-            .select('id, nome')
-            .single()
-          
-          if (createError) {
-            console.error("❌ Erro ao criar perfil:", createError)
-            throw createError
-          }
-          
-          if (novoPerfilData) {
-            console.log("✅ Perfil criado:", novoPerfilData)
-            perfilId = novoPerfilData.id
-            perfilNome = novoPerfilData.nome
-          }
-        } else {
-          throw perfilError
-        }
-      }
-      
       if (perfil) {
-        console.log("✅ Perfil encontrado:", perfil)
-        perfilId = perfil.id
-        perfilNome = perfil.nome
+        setUserPerfilId(perfil.id)
+        setUserNome(perfil.nome || perfil.email?.split('@')[0] || 'Usuário')
+        
+        const { data: setoresData } = await supabase.from('setores').select('*')
+        const setoresDoUsuario = setoresData?.filter(setor => 
+          setor.pessoas && setor.pessoas.includes(perfil.id)
+        ) || []
+        setUserSetoresIds(setoresDoUsuario.map(s => s.id))
       }
-      
-      if (perfilId) {
-        setUserPerfilId(perfilId)
-        setUserNome(perfilNome)
-        return perfilId
-      }
-      return null
     } catch (error) {
-      console.error("❌ Erro ao buscar/criar perfil:", error)
-      return null
+      console.error('Erro ao buscar perfil:', error)
     }
   }
 
-  // Carregar dados do usuário atual
-  const loadUserData = async () => {
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError) throw userError
-      if (!user) throw new Error("Usuário não está logado")
-      
-      setUserEmail(user.email || '')
-    } catch (error) {
-      console.error("Erro ao carregar dados do usuário:", error)
-      setError("Erro ao carregar dados do usuário")
-    }
-  }
-
-  // Buscar setores do usuário
-  const findUserSetores = async (perfilId: string) => {
-    if (!perfilId) {
-      console.log("❌ perfilId é null, não é possível buscar setores")
-      return []
-    }
+  const carregarTodosUsuarios = async () => {
+    if (userSetoresIds.length === 0) return
     
-    console.log("🔍 Buscando setores para o perfil ID:", perfilId)
-    
-    try {
-      const { data: setoresData, error } = await supabase
-        .from('setores')
-        .select('*')
-      
-      if (error) {
-        console.error("❌ Erro ao buscar setores:", error)
-        throw error
+    const setoresDoUsuario = setores.filter(s => userSetoresIds.includes(s.id))
+    const todosIds: string[] = []
+    setoresDoUsuario.forEach(setor => {
+      if (setor.pessoas && setor.pessoas.length > 0) {
+        todosIds.push(...setor.pessoas)
       }
+    })
+    
+    const idsUnicos = [...new Set(todosIds)]
+    
+    if (idsUnicos.length > 0) {
+      const { data: perfis } = await supabase
+        .from('perfis')
+        .select('id, nome, email')
+        .in('id', idsUnicos)
       
-      const setoresDoUsuario = setoresData?.filter(setor => {
-        const pessoasSetor = setor.pessoas || []
-        return pessoasSetor.includes(perfilId)
-      }) || []
-      
-      console.log(`📊 Total de setores encontrados para o usuário: ${setoresDoUsuario.length}`)
-      
-      const setoresIds = setoresDoUsuario.map(s => s.id)
-      setUserSetoresIds(setoresIds)
-      console.log("📋 Setores IDs do usuário:", setoresIds)
-      
-      return setoresIds
-    } catch (error) {
-      console.error("❌ Erro ao buscar setores do usuário:", error)
-      return []
+      if (perfis) {
+        setUsuarios(perfis)
+      }
     }
   }
 
-  const fetchTiposAcoes = async () => {
-    try {
-      const { data: tiposData, error } = await supabase
-        .from('tipo_acao')
-        .select('*')
+  const carregarPessoasDoSetor = async (setorId: string) => {
+    const setor = setores.find(s => s.id === setorId)
+    if (setor?.pessoas && setor.pessoas.length > 0) {
+      const { data: perfis } = await supabase
+        .from('perfis')
+        .select('id, nome, email')
+        .in('id', setor.pessoas)
       
-      if (error) throw error
-      setTiposAcoes(tiposData || [])
-    } catch (error) {
-      console.error("Erro ao carregar tipos de ação:", error)
+      if (perfis && perfis.length > 0) {
+        const nomes = perfis.map(p => p.nome?.trim() || p.email)
+        setPessoas(nomes)
+      } else {
+        setPessoas([])
+      }
+    } else {
+      setPessoas([])
     }
   }
 
   const fetchSetores = async () => {
-    try {
-      const { data: setoresData, error } = await supabase
-        .from('setores')
-        .select('*')
-      
-      if (error) throw error
-      setSetores(setoresData || [])
-    } catch (error) {
-      console.error("Erro ao carregar setores:", error)
-    }
+    const { data } = await supabase.from('setores').select('*')
+    if (data) setSetores(data)
+  }
+
+  const fetchTiposAcoes = async () => {
+    const { data } = await supabase.from('tipo_acao').select('*')
+    if (data) setTiposAcoes(data)
+  }
+
+  const fetchLocais = async () => {
+    const { data } = await supabase
+      .from('locais')
+      .select('*')
+      .eq('ativo', true)
+      .order('nome')
+    if (data) setLocais(data)
   }
 
   const fetchAcoes = async () => {
-    try {
-      if (!userSetoresIds.length) {
-        setAcoes([])
-        return
-      }
+    if (!userSetoresIds.length) return
+    const { data } = await supabase
+      .from('acoes')
+      .select('*')
+      .in('setor_id', userSetoresIds)
+      .order('created_at', { ascending: false })
+    
+    if (data) {
+      const userIds = new Set<string>()
+      data.forEach(acao => {
+        if (acao.created_by) userIds.add(acao.created_by)
+        if (acao.updated_by) userIds.add(acao.updated_by)
+      })
       
-      const { data: acoesData, error } = await supabase
-        .from('acoes')
-        .select('*')
-        .in('setor_id', userSetoresIds)
-        .order('created_at', { ascending: false })
+      const { data: perfis } = await supabase
+        .from('perfis')
+        .select('id, nome, email')
+        .in('id', Array.from(userIds))
       
-      if (error) throw error
-      
-      // NOVO: Buscar os nomes dos usuários que criaram/atualizaram
-      if (acoesData && acoesData.length > 0) {
-        // Coletar todos os IDs únicos de created_by e updated_by
-        const userIds = new Set<string>()
-        acoesData.forEach(acao => {
-          if (acao.created_by) userIds.add(acao.created_by)
-          if (acao.updated_by) userIds.add(acao.updated_by)
-        })
-        
-        // Buscar os perfis desses usuários
-        const { data: perfisData, error: perfisError } = await supabase
-          .from('perfis')
-          .select('id, nome')
-          .in('id', Array.from(userIds))
-        
-        if (!perfisError && perfisData) {
-          // Criar um mapa ID -> Nome
-          const nomeMap = new Map(perfisData.map(p => [p.id, p.nome]))
-          
-          // Adicionar os nomes às ações
-          const acoesComNomes = acoesData.map(acao => ({
-            ...acao,
-            created_by_nome: nomeMap.get(acao.created_by) || 'Desconhecido',
-            updated_by_nome: nomeMap.get(acao.updated_by) || 'Desconhecido'
-          }))
-          
-          setAcoes(acoesComNomes)
-          return
-        }
-      }
-      
-      setAcoes(acoesData || [])
-    } catch (error) {
-      console.error("Erro ao carregar ações:", error)
-      setAcoes([])
+      const nomeMap = new Map(perfis?.map(p => [p.id, p.nome?.trim() || p.email]))
+      setAcoes(data.map(acao => ({
+        ...acao,
+        created_by_nome: nomeMap.get(acao.created_by) || 'Desconhecido',
+        updated_by_nome: nomeMap.get(acao.updated_by) || 'Desconhecido'
+      })))
     }
   }
 
-  const fetchUsuariosDoSetor = async () => {
-    if (!userSetoresIds.length) {
-      setUsuarios([])
+  const toggleSetor = async (setorId: string) => {
+    const isSelected = setoresSelecionados.includes(setorId)
+    const setor = setores.find(s => s.id === setorId)
+    
+    if (isSelected) {
+      setSetoresSelecionados(prev => prev.filter(id => id !== setorId))
+      if (setor && setor.pessoas && setor.pessoas.length > 0) {
+        const { data: perfis } = await supabase
+          .from('perfis')
+          .select('nome, email')
+          .in('id', setor.pessoas)
+        if (perfis) {
+          const nomesParaRemover = perfis.map(p => p.nome?.trim() || p.email)
+          const usuarioResponsavel = usuarios.find(u => u.id === userPerfilId)
+          const nomeResponsavel = usuarioResponsavel?.nome?.trim() || usuarioResponsavel?.email
+          
+          if (nomeResponsavel && nomesParaRemover.includes(nomeResponsavel)) {
+            const nomesFiltrados = nomesParaRemover.filter(n => n !== nomeResponsavel)
+            setPessoas(prev => prev.filter(p => !nomesFiltrados.includes(p)))
+          } else {
+            setPessoas(prev => prev.filter(p => !nomesParaRemover.includes(p)))
+          }
+        }
+      }
+    } else {
+      setSetoresSelecionados(prev => [...prev, setorId])
+      if (setor && setor.pessoas && setor.pessoas.length > 0) {
+        const { data: perfis } = await supabase
+          .from('perfis')
+          .select('nome, email')
+          .in('id', setor.pessoas)
+        if (perfis) {
+          const nomesParaAdicionar = perfis.map(p => p.nome?.trim() || p.email)
+          setPessoas(prev => [...new Set([...prev, ...nomesParaAdicionar])])
+        }
+      }
+    }
+  }
+
+  const togglePessoa = (nomePessoa: string) => {
+    const usuarioResponsavel = usuarios.find(u => u.id === userPerfilId)
+    const nomeResponsavel = usuarioResponsavel?.nome?.trim() || usuarioResponsavel?.email
+    
+    if (nomePessoa === nomeResponsavel) {
+      alert("Você não pode remover a si mesmo das pessoas envolvidas!")
       return
     }
     
-    const setorIdParaBuscar = userSetoresIds[0]
+    const setorPrincipal = setores.find(s => s.id === setorSelecionado)
+    if (!setorPrincipal) return
     
-    try {
-      const { data: setorData, error: setorError } = await supabase
-        .from('setores')
-        .select('pessoas')
-        .eq('id', setorIdParaBuscar)
-        .maybeSingle()
-      
-      if (setorError) throw setorError
-      
-      const usuariosIds = setorData?.pessoas || []
-      if (!usuariosIds.length) {
-        setUsuarios([])
-        return
+    const buscarNomes = async () => {
+      if (setorPrincipal.pessoas && setorPrincipal.pessoas.length > 0) {
+        const { data: perfis } = await supabase
+          .from('perfis')
+          .select('nome, email')
+          .in('id', setorPrincipal.pessoas)
+        
+        if (perfis) {
+          const nomesDoSetorPrincipal = perfis.map(p => p.nome?.trim() || p.email)
+          
+          const pessoasSelecionadasDoPrincipal = pessoas.filter(p => 
+            nomesDoSetorPrincipal.includes(p) && p !== nomeResponsavel
+          )
+          
+          if (nomesDoSetorPrincipal.includes(nomePessoa) && 
+              pessoasSelecionadasDoPrincipal.length === 0 && 
+              pessoas.includes(nomePessoa)) {
+            alert("Não é possível remover todas as pessoas do setor responsável pela ação!")
+            return
+          }
+          
+          setPessoas(prev => prev.includes(nomePessoa) ? prev.filter(p => p !== nomePessoa) : [...prev, nomePessoa])
+        }
       }
-      
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('perfis')
-        .select('*')
-        .in('id', usuariosIds)
-        .order('nome', { ascending: true })
-      
-      if (profilesError) throw profilesError
-      setUsuarios(profilesData || [])
-    } catch (error) {
-      console.error("Erro ao carregar usuários:", error)
-      setUsuarios([])
     }
+    
+    buscarNomes()
   }
-
-  // Inicialização
-  useEffect(() => {
-    const init = async () => {
-      setLoading(true)
-      setError(null)
-      
-      console.log("🚀 Iniciando carregamento de dados...")
-      
-      const perfilId = await getCurrentUserPerfil()
-      console.log("📌 Perfil ID obtido:", perfilId)
-      
-      await loadUserData()
-      await fetchSetores()
-      await fetchTiposAcoes()
-      
-      if (perfilId) {
-        console.log("🔍 Buscando setores para o perfil ID:", perfilId)
-        await findUserSetores(perfilId)
-      } else {
-        console.log("❌ Perfil ID não encontrado, não é possível buscar setores")
-      }
-      
-      console.log("✅ Carregamento concluído")
-      setLoading(false)
-      
-      setTimeout(() => {
-        setAnimacaoPulse(false)
-      }, 5000)
-    }
-    
-    init()
-  }, [])
-
-  // Carregar ações e usuários quando os setores do usuário estiverem disponíveis
-  useEffect(() => {
-    if (userPerfilId && userSetoresIds.length > 0) {
-      fetchAcoes()
-      fetchUsuariosDoSetor()
-    }
-  }, [userPerfilId, userSetoresIds])
 
   const resetForm = () => {
     setEditandoAcao(null)
@@ -554,8 +468,65 @@ export default function AcoesPage() {
     setStatus('Pendente')
     setDadosExtras({})
     setObservacoes('')
-    setSetorSelecionado(null)
-    setSetorConfirmado(false)
+    setMostrarCamposPersonalizados(false)
+    if (userSetoresIds.length === 1) {
+      const setorId = userSetoresIds[0]
+      setSetorSelecionado(setorId)
+      carregarPessoasDoSetor(setorId)
+    }
+  }
+
+  const salvarAcao = async () => {
+    if (!setorSelecionado) return alert("Selecione um setor")
+    if (!tipoAcaoId) return alert("Selecione o Tipo de Ação")
+
+    const usuarioResponsavel = usuarios.find(u => u.id === userPerfilId)
+    const nomeResponsavel = usuarioResponsavel?.nome?.trim() || usuarioResponsavel?.email
+    
+    let pessoasFinal = [...pessoas]
+    if (nomeResponsavel && !pessoasFinal.includes(nomeResponsavel)) {
+      pessoasFinal.push(nomeResponsavel)
+    }
+
+    const dadosComuns = {
+      descricao, 
+      pessoas: pessoasFinal, 
+      setores_envolvidos: setoresSelecionados, 
+      tipo_acao_id: tipoAcaoId,
+      setor_id: setorSelecionado, 
+      local, 
+      data_inicio: dataInicio ? formatarDataParaBanco(dataInicio) : null,
+      data_fim: dataFim ? formatarDataParaBanco(dataFim) : null, 
+      necessita_transporte: necessitaTransporte,
+      status, 
+      dados_extras: dadosExtras, 
+      observacoes
+    }
+
+    if (editandoAcao) {
+      await supabase.from('acoes').update({ 
+        ...dadosComuns, 
+        updated_at: new Date().toISOString(), 
+        updated_by: userPerfilId 
+      }).eq('id', editandoAcao.id)
+    } else {
+      await supabase.from('acoes').insert([{ 
+        ...dadosComuns, 
+        created_at: new Date().toISOString(), 
+        created_by: userPerfilId, 
+        updated_at: new Date().toISOString(), 
+        updated_by: userPerfilId 
+      }])
+    }
+    
+    resetForm()
+    fetchAcoes()
+  }
+
+  const deleteAcao = async (id: string) => {
+    if (!confirm("Tem certeza?")) return
+    await supabase.from('acoes').delete().eq('id', id)
+    fetchAcoes()
   }
 
   const carregarParaEdicao = (acao: Acao) => {
@@ -572,658 +543,203 @@ export default function AcoesPage() {
     setDadosExtras(acao.dados_extras || {})
     setObservacoes(acao.observacoes || '')
     setSetorSelecionado(acao.setor_id || null)
-    setSetorConfirmado(true)
     setFormExpandido(true)
-
+    setMostrarCamposPersonalizados(true)
     window.scrollTo({ top: 150, behavior: 'smooth' })
   }
 
-  const handleSetorConfirm = () => {
-    if (setorSelecionado) {
-      setSetorConfirmado(true)
-    }
-  }
-
-  const handleTipoAcaoChange = (tipoId: string) => {
-    setTipoAcaoId(tipoId)
-    setDadosExtras({})
-  }
-
   const tipoAcaoSelecionado = tiposAcoes.find(ta => ta.id === tipoAcaoId)
+  const setoresDisponiveis = setores.filter(s => userSetoresIds.includes(s.id))
+  const setoresEnvolvidosDisponiveis = setores.filter(s => userSetoresIds.includes(s.id) && s.id !== setorSelecionado)
 
-  const tiposAcoesDisponiveis = tiposAcoes.filter(ta => {
-    if (!setorConfirmado || !setorSelecionado) return false
-    return ta.setores_ids?.includes(setorSelecionado)
-  })
+  if (loading) return <LoadingSpinner />
+  if (userSetoresIds.length === 0) return <SemSetor userPerfilId={userPerfilId} userNome={userNome} />
 
-  const salvarAcao = async () => {
-    if (!setorConfirmado || !setorSelecionado) {
-      alert("Selecione e confirme um setor primeiro")
-      return
-    }
-    
-    if (!tipoAcaoId) {
-      alert("Selecione o Tipo de Ação")
-      return
-    }
-
-    try {
-      // Converter datas para UTC antes de salvar
-      const dataInicioFormatada = formatarDataParaBanco(dataInicio)
-      const dataFimFormatada = formatarDataParaBanco(dataFim)
-      
-      // Dados comuns para criação E atualização
-      const dadosComuns = {
-        descricao,
-        pessoas,
-        setores_envolvidos: setoresSelecionados,
-        tipo_acao_id: tipoAcaoId,
-        setor_id: setorSelecionado,
-        local,
-        data_inicio: dataInicioFormatada || null,
-        data_fim: dataFimFormatada || null,
-        necessita_transporte: necessitaTransporte,
-        status,
-        dados_extras: dadosExtras,
-        observacoes: observacoes,
-      }
-
-      let error
-      if (editandoAcao) {
-        // NA ATUALIZAÇÃO: NÃO incluir created_by
-        const { error: updateError } = await supabase
-          .from('acoes')
-          .update({
-            ...dadosComuns,
-            updated_at: new Date().toISOString(),
-            updated_by: userPerfilId  // ← Só atualiza quem modificou
-          })
-          .eq('id', editandoAcao.id)
-        error = updateError
-      } else {
-        // NA CRIAÇÃO: Inclui created_by e updated_by
-        const { error: insertError } = await supabase
-          .from('acoes')
-          .insert([{
-            ...dadosComuns,
-            created_at: new Date().toISOString(),
-            created_by: userPerfilId,  // ← Só na criação
-            updated_at: new Date().toISOString(),
-            updated_by: userPerfilId   // ← Também na criação (inicialmente igual ao created_by)
-          }])
-        error = insertError
-      }
-
-      if (error) {
-        console.error("❌ Erro do Supabase:", error)
-        throw error
-      }
-
-      console.log("✅ Ação salva com sucesso!")
-      resetForm()
-      fetchAcoes()
-      fetchUsuariosDoSetor()
-    } catch (error) {
-      console.error("Erro ao salvar:", error)
-      alert("Erro ao salvar ação: " + (error as Error).message)
-    }
+  const getNomeExibicao = (usuario: Usuario) => {
+    return usuario.nome?.trim() || usuario.email
   }
 
-  const deleteAcao = async (id: string) => {
-    if (!confirm("Tem certeza que deseja excluir esta ação?")) return
-    try {
-      const { error } = await supabase
-        .from('acoes')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
-      fetchAcoes()
-    } catch (error) {
-      console.error("Erro ao deletar:", error)
-      alert("Erro ao deletar ação")
-    }
-  }
-
-  const togglePessoa = (nomePessoa: string) => {
-    setPessoas((prev) => 
-      prev.includes(nomePessoa) 
-        ? prev.filter(p => p !== nomePessoa)
-        : [...prev, nomePessoa]
-    )
-  }
-
-  const toggleSetor = (setorId: string) => {
-    setSetoresSelecionados((prev) => 
-      prev.includes(setorId) 
-        ? prev.filter(id => id !== setorId)
-        : [...prev, setorId]
-    )
-  }
-
-  const renderizarCampoExtra = (param: ParametroExtra) => {
-    const valor = dadosExtras[param.label] ?? ''
-    const atualizarValor = (novoValor: any) => {
-      setDadosExtras(prev => ({ ...prev, [param.label]: novoValor }))
-    }
-
-    switch (param.tipo) {
-      case 'text':
-        return (
-          <input
-            type="text"
-            placeholder={param.label}
-            value={valor}
-            onChange={(e) => atualizarValor(e.target.value)}
-            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
-          />
-        )
-      case 'number':
-        return (
-          <input
-            type="number"
-            placeholder={param.label}
-            value={valor}
-            onChange={(e) => atualizarValor(e.target.value)}
-            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
-          />
-        )
-      case 'boolean':
-        return (
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => atualizarValor(true)}
-              className={`px-4 py-2 rounded-lg border ${
-                valor === true ? 'bg-[#7114dd] text-white' : 'bg-white text-gray-700'
-              }`}
-            >
-              Sim
-            </button>
-            <button
-              type="button"
-              onClick={() => atualizarValor(false)}
-              className={`px-4 py-2 rounded-lg border transition-colors ${
-                valor === false 
-                  ? 'bg-[#ffa301] text-[#7114dd] border-[#ffa301]' 
-                  : 'bg-white text-gray-700 border-gray-300'
-              }`}
-            >
-              Não
-            </button>
-          </div>
-        )
-      case 'select':
-        return (
-          <select
-            value={valor}
-            onChange={(e) => atualizarValor(e.target.value)}
-            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
-          >
-            <option value="">Selecione...</option>
-            {param.opcoes?.map(op => (
-              <option key={op} value={op}>{op}</option>
-            ))}
-          </select>
-        )
-      case 'multiselect':
-        const valoresSelecionados = Array.isArray(valor) ? valor : []
-        return (
-          <div className="border rounded-lg p-3 space-y-2">
-            <p className="text-sm font-medium text-gray-700 mb-2">{param.label}</p>
-            <div className="space-y-1">
-              {param.opcoes?.map(op => (
-                <label key={op} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={valoresSelecionados.includes(op)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        atualizarValor([...valoresSelecionados, op])
-                      } else {
-                        atualizarValor(valoresSelecionados.filter(v => v !== op))
-                      }
-                    }}
-                  />
-                  <span className="text-sm">{op}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        )
-      default:
-        return null
-    }
-  }
-
-  const getTipoAcaoNome = (tipoAcaoId?: string) => {
-    const tipo = tiposAcoes.find(t => t.id === tipoAcaoId)
-    return tipo?.nome || 'Sem tipo'
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Realizada':
-        return 'bg-green-100 text-green-700'
-      case 'Cancelada':
-        return 'bg-red-100 text-red-700'
-      case 'Pendente':
-        return 'bg-yellow-100 text-yellow-700'
-      case 'Realizada Parcialmente':
-        return 'bg-blue-100 text-blue-700'
-      case 'Reagendada':
-        return 'bg-purple-100 text-purple-700'
-      default:
-        return 'bg-gray-100 text-gray-700'
-    }
-  }
-
-  const renderSetorSelector = () => {
-    const setoresDisponiveis = setores.filter(s => userSetoresIds.includes(s.id))
-
-    if (setoresDisponiveis.length === 0 && !editandoAcao) return null
-
-    return (
-      <div className={`mb-6 p-5 rounded-xl border-2 transition-all ${
-        !setorConfirmado 
-          ? 'border-[#ffa301] bg-linear-to-r from-[#ffa301]/20 to-[#ffa301]/5 shadow-lg shadow-[#ffa301]/20' 
-          : 'border-green-200 bg-green-50'
-      }`}>
-        <div className="flex items-center justify-between mb-3">
-          <label className="block text-sm font-semibold text-gray-700">
-            <Building2 size={18} className="inline mr-2 text-[#ffa301]" />
-            Setor Responsável *
-          </label>
-          {setorConfirmado && (
-            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full flex items-center gap-1">
-              <CheckCircle size={12} /> Confirmado
-            </span>
-          )}
-        </div>
-        
-        {!setorConfirmado ? (
-          <>
-            <div className="relative text-slate-700">
-              <select
-                value={setorSelecionado || ''}
-                onChange={(e) => setSetorSelecionado(e.target.value)}
-                className={`w-full p-4 border-2 border-[#ffa301] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ffa301] mb-3 text-base bg-white ${
-                  animacaoPulse ? 'animate-pulse' : ''
-                }`}
-                style={{ borderWidth: '2px' }}
-              >
-                <option value="">🏢 Selecione um setor para continuar</option>
-                {setoresDisponiveis.map(setor => (
-                  <option key={setor.id} value={setor.id}>
-                    🏢 {setor.nome}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 text-[#ffa301] pointer-events-none" size={20} />
-            </div>
-            
-            <button
-              onClick={handleSetorConfirm}
-              disabled={!setorSelecionado}
-              className={`w-full bg-linear-to-r from-[#ffa301] to-[#ffa301]/80 text-[#7114dd] font-bold px-6 py-3 rounded-xl hover:from-[#ffa301] hover:to-[#ffa301] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg ${
-                setorSelecionado ? 'hover:scale-[1.02]' : ''
-              }`}
-            >
-              <CheckCircle size={18} className="inline mr-2" />
-              Confirmar Setor
-            </button>
-            
-            <div className="mt-3 p-3 bg-[#ffa301]/10 rounded-lg border border-[#ffa301]/30">
-              <p className="text-sm text-[#7114dd] flex items-center gap-2">
-                <AlertCircle size={16} />
-                <span className="font-medium">Atenção:</span> Selecione o setor responsável para continuar com o cadastro da ação
-              </p>
-            </div>
-          </>
-        ) : (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-[#7114dd]/10 rounded-xl flex items-center justify-center">
-                <Building2 size={24} className="text-[#7114dd]" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900 text-lg">
-                  {setores.find(s => s.id === setorSelecionado)?.nome}
-                </p>
-                <p className="text-xs text-gray-500">Setor responsável pela ação</p>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                setSetorConfirmado(false)
-                setSetorSelecionado(null)
-                setTipoAcaoId('')
-              }}
-              className="text-sm text-red-500 hover:text-red-700 font-medium px-3 py-1 rounded-lg hover:bg-red-50 transition"
-            >
-              Alterar setor
-            </button>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  const pendentesCount = acoes.filter(a => a.status === 'Pendente' || a.status === 'Reagendada').length
-  const realizadasCount = acoes.filter(a => a.status === 'Realizada' || a.status === 'Realizada Parcialmente' || a.status === 'Cancelada').length
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-linear-to-br from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7114dd] mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando dados...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-linear-to-br from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <X className="w-8 h-8 text-red-500" />
-          </div>
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Erro</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="bg-[#7114dd] text-white px-6 py-2 rounded-lg hover:bg-[#a94dff] transition"
-          >
-            Tentar novamente
-          </button>
-        </div>
-      </div>
-    )
-  }
-  
-  if (userSetoresIds.length === 0) {
-    return (
-      <div className="min-h-screen bg-linear-to-br from-[#7114dd]/10 to-[#a94dff]/10 flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Users className="w-8 h-8 text-red-500" />
-          </div>
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Acesso Restrito</h2>
-          <p className="text-gray-600 mb-4">
-            Você não está vinculado a nenhum setor.
-          </p>
-          <p className="text-sm text-gray-500">
-            Entre em contato com o administrador para ser adicionado a um setor.
-          </p>
-          <div className="mt-4 p-3 bg-gray-100 rounded-lg text-left">
-            <p className="text-xs font-mono">
-              Seu ID: {userPerfilId || 'Não carregado'}<br/>
-              Email: {userEmail}<br/>
-              Nome: {userNome}
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const setoresDoUsuario = setores.filter(s => userSetoresIds.includes(s.id))
+  const usuarioResponsavel = usuarios.find(u => u.id === userPerfilId)
+  const nomeResponsavel = usuarioResponsavel?.nome?.trim() || usuarioResponsavel?.email
 
   return (
-    <div className="min-h-screen text-slate-700 bg-linear-to-br from-[#7114dd]/10 to-[#a94dff]/10 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="mb-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">
-                Gerenciamento de Ações
-              </h1>
-              <p className="text-gray-500 mt-1">
-                Olá, {userNome}!
-                {setoresDoUsuario.length > 0 && (
-                  <span> • Setor(es): {setoresDoUsuario.map(s => s.nome).join(', ')}</span>
-                )}
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                resetForm()
-                setFormExpandido(!formExpandido)
-                setMostrarListaAcoes(false)
-              }}
-              className="flex items-center gap-2 bg-[#7114dd] text-white px-4 py-2 rounded-lg hover:bg-[#a94dff] transition shadow-md"
-            >
-              <Plus size={20} />
-              {formExpandido ? 'Fechar Formulário' : 'Nova Ação'}
-            </button>
-          </div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
+            Gerenciamento de Ações
+          </h1>
+          <p className="text-gray-500 mt-1">
+            Olá, {userNome} • Setor: {setoresDisponiveis.map(s => s.nome).join(', ')}
+          </p>
         </div>
 
-        {/* Formulário */}
         {formExpandido && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                {editandoAcao ? 'Editar Ação' : 'Criar Nova Ação'}
-              </h2>
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-gray-800">{editandoAcao ? 'Editar Ação' : 'Nova Ação'}</h2>
               {editandoAcao && (
-                <button
-                  onClick={resetForm}
-                  className="text-gray-500 hover:text-gray-700 text-sm flex items-center gap-1"
-                >
-                  <X size={16} /> Cancelar edição
-                </button>
+                <button onClick={resetForm} className="text-gray-500 hover:text-gray-700">Cancelar edição</button>
               )}
             </div>
 
             <div className="space-y-4">
-              {renderSetorSelector()}
+              {setoresDisponiveis.length > 1 && (
+                <div className="bg-gradient-to-r from-amber-50 to-yellow-50 p-5 rounded-xl border-2 border-amber-200">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Setor Responsável</label>
+                  <select
+                    value={setorSelecionado || ''}
+                    onChange={(e) => {
+                      const novoSetorId = e.target.value
+                      setSetorSelecionado(novoSetorId)
+                      carregarPessoasDoSetor(novoSetorId)
+                    }}
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">Selecione um setor</option>
+                    {setoresDisponiveis.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                  </select>
+                </div>
+              )}
 
-              {/* Campos condicionais - só aparecem após confirmar o setor */}
-              {setorConfirmado && (
+              {setorSelecionado && (
                 <>
-                  {/* Tipo de Ação */}
-                  <div className="text-slate-700">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      Tipo de Ação *
-                    </label>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Tipo de Ação *</label>
                     <select
                       value={tipoAcaoId}
-                      onChange={(e) => handleTipoAcaoChange(e.target.value)}
-                      className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
-                      required
+                      onChange={(e) => setTipoAcaoId(e.target.value)}
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500"
                     >
-                      <option value="">Selecione um tipo de ação</option>
-                      {tiposAcoesDisponiveis.map((ta) => (
-                        <option key={ta.id} value={ta.id}>
-                          {ta.nome}
-                        </option>
+                      <option value="">Selecione</option>
+                      {tiposAcoes.filter(ta => ta.setores_ids?.includes(setorSelecionado)).map(ta => (
+                        <option key={ta.id} value={ta.id}>{ta.nome}</option>
                       ))}
                     </select>
                   </div>
 
-                  {/* Descrição */}
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      Descrição
-                    </label>
-                    <textarea
-                      placeholder="Descreva os detalhes da ação..."
-                      value={descricao}
-                      onChange={(e) => setDescricao(e.target.value)}
-                      rows={3}
-                      className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
-                    />
-                  </div>
+                  <textarea 
+                    placeholder="Descrição da ação..." 
+                    value={descricao} 
+                    onChange={(e) => setDescricao(e.target.value)} 
+                    rows={3} 
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500" 
+                  />
 
-                  {/* Campos Padrão */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">
-                        <MapPin size={18} className="inline mr-1" />
-                        Local (Escola)
-                      </label>
-                      <select
-                        value={local}
-                        onChange={(e) => setLocal(e.target.value)}
-                        className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
-                      >
-                        <option value="">Selecione uma escola</option>
-                        {ESCOLAS_OPCOES.map(escola => (
-                          <option key={escola} value={escola}>{escola}</option>
-                        ))}
-                      </select>
-                    </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <select value={local} onChange={(e) => setLocal(e.target.value)} className="p-3 border rounded-lg">
+                      <option value="">Local (Escola)</option>
+                      {locais.map(local => <option key={local.id} value={local.nome}>{local.nome}</option>)}
+                    </select>
 
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">
-                        Status
-                      </label>
-                      <select
-                        value={status}
-                        onChange={(e) => setStatus(e.target.value)}
-                        className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
-                      >
-                        {STATUS_OPCOES.map(s => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <select value={status} onChange={(e) => setStatus(e.target.value)} className="p-3 border rounded-lg">
+                      {STATUS_OPCOES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
 
-                    {/* Campos de data com minutos restritos */}
-                    <DateTimeLocalInput
-                      value={dataInicio}
-                      onChange={setDataInicio}
-                      label="Data de Início"
-                    />
-
-                    <DateTimeLocalInput
-                      value={dataFim}
-                      onChange={setDataFim}
-                      label="Data de Término"
-                    />
+                    <DateOnlyInput value={dataInicio} onChange={setDataInicio} label="Data de Início" />
+                    
+                    <DateOnlyInput value={dataFim} onChange={setDataFim} label="Data de Término (opcional)" />
 
                     <div className="flex items-center">
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={necessitaTransporte}
-                          onChange={(e) => setNecessitaTransporte(e.target.checked)}
-                          className="rounded accent-[#7114dd]"
-                        />
-                        <Car size={22} className="text-[#7114dd]" />
-                        <span className="text-sm font-medium text-[#7114dd]">Necessita Transporte</span>
+                        <input type="checkbox" checked={necessitaTransporte} onChange={(e) => setNecessitaTransporte(e.target.checked)} className="accent-purple-600" />
+                        <Car size={20} className="text-purple-600" />
+                        <span>Necessita Transporte</span>
                       </label>
                     </div>
                   </div>
 
-                  {/* Campos Personalizados */}
-                  {tipoAcaoSelecionado && tipoAcaoSelecionado.parametros_extras.length > 0 && (
-                    <div className="border-t pt-4 mt-4">
-                      <h3 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                        <Plus size={16} className="text-[#7114dd]" />
-                        Campos Específicos
-                      </h3>
-                      <div className="space-y-3">
-                        {tipoAcaoSelecionado.parametros_extras.map((param) => (
-                          <div key={param.id}>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              {param.label}
-                            </label>
-                            {renderizarCampoExtra(param)}
-                          </div>
+                  {setoresEnvolvidosDisponiveis.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">Setores Envolvidos</label>
+                      <div className="flex flex-wrap gap-2">
+                        {setoresEnvolvidosDisponiveis.map(setor => (
+                          <button
+                            key={setor.id}
+                            onClick={() => toggleSetor(setor.id)}
+                            className={`px-3 py-1.5 rounded-full text-sm transition ${
+                              setoresSelecionados.includes(setor.id) ? "bg-purple-600 text-white" : "bg-gray-100 hover:bg-gray-200"
+                            }`}
+                          >
+                            {setor.nome}
+                          </button>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Setores Envolvidos */}
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      <Building2 size={16} className="inline mr-1" />
-                      Setores Envolvidos
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {setores.map((setor) => (
-                        <button
-                          key={setor.id}
-                          type="button"
-                          onClick={() => toggleSetor(setor.id)}
-                          className={`px-3 py-1.5 rounded-full text-sm transition ${
-                            setoresSelecionados.includes(setor.id)
-                              ? "bg-[#7114dd] text-white shadow-md" 
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                          }`}
-                        >
-                          🏢 {setor.nome}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Pessoas Envolvidas */}
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      <Users size={16} className="inline mr-1" />
-                      Pessoas Envolvidas
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {usuarios.map((user) => (
-                        <button
-                          key={user.id}
-                          type="button"
-                          onClick={() => togglePessoa(user.nome)}
-                          className={`px-3 py-1.5 rounded-full text-sm transition ${
-                            pessoas.includes(user.nome)
-                              ? "bg-[#ffa301] text-[#7114dd] shadow-md" 
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                          }`}
-                        >
-                          👤 {user.nome}
-                        </button>
-                      ))}
-                      {usuarios.length === 0 && (
-                        <p className="text-gray-500 text-sm">Nenhuma pessoa encontrada neste setor</p>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Pessoas Envolvidas</label>
+                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border rounded-lg bg-gray-50">
+                      {usuarios.length > 0 ? (
+                        usuarios.map(user => {
+                          const nomeExibicao = getNomeExibicao(user)
+                          const isSelected = pessoas.includes(nomeExibicao)
+                          const isResponsavel = nomeExibicao === nomeResponsavel
+                          return (
+                            <button
+                              key={user.id}
+                              onClick={() => togglePessoa(nomeExibicao)}
+                              className={`px-3 py-1.5 rounded-full text-sm transition ${
+                                isSelected 
+                                  ? "bg-amber-400 text-purple-900 font-medium shadow-sm" 
+                                  : "bg-white text-gray-700 border hover:bg-gray-100"
+                              } ${isResponsavel ? "ring-2 ring-purple-500 ring-offset-1" : ""}`}
+                              title={isResponsavel ? "Responsável pela ação (não pode ser removido)" : ""}
+                            >
+                              {nomeExibicao} {isResponsavel && "⭐"}
+                            </button>
+                          )
+                        })
+                      ) : (
+                        <p className="text-gray-500 text-sm p-2">Nenhuma pessoa encontrada</p>
                       )}
                     </div>
-                  </div>
-
-                  {/* Observações */}
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      <AlertCircle size={16} className="inline mr-1" />
-                      Observações
-                    </label>
-                    <textarea
-                      placeholder="Observações adicionais sobre a ação..."
-                      value={observacoes}
-                      onChange={(e) => setObservacoes(e.target.value)}
-                      rows={3}
-                      className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7114dd]"
-                    />
                     <p className="text-xs text-gray-400 mt-1">
-                      Informações complementares, pendências, alertas, etc.
+                      ⭐ Você é o responsável e não pode ser removido. As pessoas do setor responsável já estão selecionadas automaticamente.
                     </p>
                   </div>
 
-                  {/* Botões */}
+                  {tipoAcaoSelecionado && tipoAcaoSelecionado.parametros_extras && tipoAcaoSelecionado.parametros_extras.length > 0 && (
+                    <div className="border-t pt-4">
+                      <button
+                        onClick={() => setMostrarCamposPersonalizados(!mostrarCamposPersonalizados)}
+                        className="flex items-center gap-2 text-purple-600 hover:text-purple-700 font-medium mb-3"
+                      >
+                        {mostrarCamposPersonalizados ? <EyeOff size={18} /> : <EyeIcon size={18} />}
+                        {mostrarCamposPersonalizados ? 'Ocultar' : 'Mostrar'} Campos Específicos
+                      </button>
+                      
+                      {mostrarCamposPersonalizados && (
+                        <div className="space-y-3">
+                          {tipoAcaoSelecionado.parametros_extras.map(param => (
+                            <div key={param.id}>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">{param.label}</label>
+                              {renderizarCampoExtra(param, dadosExtras, setDadosExtras)}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <textarea 
+                    placeholder="Observações..." 
+                    value={observacoes} 
+                    onChange={(e) => setObservacoes(e.target.value)} 
+                    rows={2} 
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500" 
+                  />
+
                   <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={salvarAcao}
-                      disabled={!tipoAcaoId}
-                      className="flex-1 bg-[#7114dd] text-white px-6 py-3 rounded-lg hover:bg-[#a94dff] transition disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-md"
-                    >
-                      {editandoAcao ? 'Atualizar Ação' : 'Criar Ação'}
-                    </button>
                     <button 
-                      onClick={resetForm}
-                      className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-gray-700"
+                      onClick={salvarAcao} 
+                      disabled={!tipoAcaoId} 
+                      className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition font-medium shadow-md disabled:opacity-50"
                     >
-                      Limpar
+                      {editandoAcao ? 'Atualizar' : 'Criar'} Ação
                     </button>
+                    <button onClick={resetForm} className="px-6 py-3 border rounded-lg hover:bg-gray-50 transition">Limpar</button>
                   </div>
                 </>
               )}
@@ -1231,208 +747,204 @@ export default function AcoesPage() {
           </div>
         )}
 
-        {/* Botão para mostrar/ocultar lista de ações */}
         {acoes.length > 0 && (
           <div className="mb-4">
-            <button
-              onClick={() => setMostrarListaAcoes(!mostrarListaAcoes)}
-              className="w-full flex items-center justify-between bg-white rounded-xl p-4 shadow-md hover:shadow-lg transition-all"
-            >
+            <button onClick={() => setMostrarListaAcoes(!mostrarListaAcoes)} className="w-full flex items-center justify-between bg-white rounded-xl p-4 shadow-md">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#7114dd]/10 rounded-full flex items-center justify-center">
-                  <List size={20} className="text-[#7114dd]" />
+                <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                  <List size={20} className="text-purple-600" />
                 </div>
-                <div className="text-left">
-                  <h3 className="font-semibold text-gray-800">Ações Cadastradas</h3>
-                  <p className="text-sm text-gray-500">
-                    {pendentesCount} pendente{pendentesCount !== 1 ? 's' : ''} • {realizadasCount} realizada{realizadasCount !== 1 ? 's' : ''}
-                  </p>
+                <div>
+                  <h3 className="font-semibold">Ações Cadastradas</h3>
+                  <p className="text-sm text-gray-500">{acoes.filter(a => a.status === 'Pendente').length} pendente(s)</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 text-[#7114dd]">
-                <span className="text-sm font-medium">
-                  {mostrarListaAcoes ? 'Ocultar' : 'Visualizar'}
-                </span>
-                {mostrarListaAcoes ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-              </div>
+              {mostrarListaAcoes ? <ChevronUp /> : <ChevronDown />}
             </button>
-          </div>
-        )}
 
-        {/* Lista de Ações */}
-        {mostrarListaAcoes && acoes.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <Calendar size={20} className="text-[#7114dd]" />
-              Lista de Ações
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                ({acoes.length} {acoes.length === 1 ? 'ação' : 'ações'})
-              </span>
-            </h2>
-            <div className="space-y-4">
-              {acoes.map((acao) => {
-                const setorDaAcao = setores.find(s => s.id === acao.setor_id)
-                const setoresEnvolvidos = setores.filter(s => acao.setores_envolvidos?.includes(s.id))
-                const tipoAcao = tiposAcoes.find(t => t.id === acao.tipo_acao_id)
+            {mostrarListaAcoes && (
+              <div className="bg-white rounded-2xl shadow-lg p-6 mt-2">
+                <div className="space-y-4">
+                  {acoesVisiveis.map(acao => (
+                    <AcaoCard
+                      key={acao.id}
+                      acao={acao}
+                      setores={setores}
+                      tiposAcoes={tiposAcoes}
+                      usuarios={usuarios}
+                      onEdit={carregarParaEdicao}
+                      onDelete={deleteAcao}
+                    />
+                  ))}
+                </div>
                 
-                return (
-                  <div key={acao.id} className="border rounded-xl p-5 hover:shadow-md transition bg-white">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        {/* Cabeçalho */}
-                        <div className="flex items-center gap-2 mb-3 flex-wrap">
-                          <h3 className="font-bold text-lg text-gray-800">
-                            {getTipoAcaoNome(acao.tipo_acao_id)} - {new Date(acao.created_at).toLocaleDateString('pt-BR')}
-                          </h3>
-                          <span className="text-xs bg-[#7114dd]/10 text-[#7114dd] px-2 py-1 rounded-full">
-                            {getTipoAcaoNome(acao.tipo_acao_id)}
-                          </span>
-                          <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(acao.status || 'Pendente')}`}>
-                            {acao.status}
-                          </span>
-                          {setorDaAcao && (
-                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                              🏢 {setorDaAcao.nome}
-                            </span>
-                          )}
-                        </div>
-                        
-                        {/* Descrição */}
-                        {acao.descricao && (
-                          <p className="text-gray-600 mb-3">{acao.descricao}</p>
-                        )}
-                        
-                        {/* Local e Datas - usando formatação local */}
-                        <div className="flex flex-wrap gap-4 mb-3 text-sm text-gray-500">
-                          {acao.local && (
-                            <span className="flex items-center gap-1">
-                              <MapPin size={14} /> {acao.local}
-                            </span>
-                          )}
-                          {acao.data_inicio && (
-                            <span className="flex items-center gap-1">
-                              <Calendar size={14} /> 
-                              Início: {formatarDataParaExibicaoLista(acao.data_inicio)}
-                            </span>
-                          )}
-                          {acao.data_fim && (
-                            <span className="flex items-center gap-1">
-                              <Calendar size={14} /> 
-                              Término: {formatarDataParaExibicaoLista(acao.data_fim)}
-                            </span>
-                          )}
-                          {acao.necessita_transporte && (
-                            <span className="flex items-center gap-1 text-amber-600">
-                              <Truck size={14} /> Necessita Transporte
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Setores Envolvidos */}
-                        {setoresEnvolvidos.length > 0 && (
-                          <div className="mt-3 mb-2">
-                            <p className="text-xs font-semibold text-gray-500 mb-2">Setores Envolvidos:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {setoresEnvolvidos.map(setor => (
-                                <span key={setor.id} className="text-xs bg-[#7114dd]/10 text-[#7114dd] px-2 py-1 rounded-full">
-                                  🏢 {setor.nome}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Campos Personalizados */}
-                        {acao.dados_extras && Object.keys(acao.dados_extras).length > 0 && (
-                          <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                            <p className="text-xs font-semibold text-gray-500 mb-2">Informações Específicas:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {Object.entries(acao.dados_extras).map(([key, valor]) => {
-                                if (!valor) return null
-                                const valorExibido = Array.isArray(valor) ? valor.join(', ') : 
-                                                     typeof valor === 'boolean' ? (valor ? 'Sim' : 'Não') : valor
-                                return (
-                                  <span key={key} className="text-xs bg-gray-200 px-2 py-1 rounded-full">
-                                    {key}: {valorExibido}
-                                  </span>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Observações */}
-                        {acao.observacoes && (
-                          <div className="mt-3 p-3 bg-yellow-50 rounded-lg">
-                            <p className="text-xs font-semibold text-gray-500 mb-1">Observações:</p>
-                            <p className="text-sm text-gray-600">{acao.observacoes}</p>
-                          </div>
-                        )}
-                        
-                        {/* Pessoas Envolvidas */}
-                        {acao.pessoas && acao.pessoas.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-3">
-                            {acao.pessoas.map((pessoa, idx) => (
-                              <span key={idx} className="text-xs bg-gray-100 px-2 py-1 rounded-full">
-                                👤 {pessoa}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        
-                        {/* Datas de criação e atualização */}
-                        <div className="flex flex-wrap gap-4 text-xs text-gray-500 mt-3 pt-2 border-t border-gray-100">
-                          <div className="flex items-center gap-1">
-                            <span className="font-medium">Criado por:</span>
-                            <span className="text-gray-700">{acao.created_by_nome || 'Desconhecido'}</span>
-                            <span className="text-gray-400">em {new Date(acao.created_at).toLocaleString('pt-BR')}</span>
-                          </div>
-                          
-                          {acao.updated_at && acao.updated_at !== acao.created_at && (
-                            <div className="flex items-center gap-1">
-                              <span className="font-medium">Atualizado por:</span>
-                              <span className="text-gray-700">{acao.updated_by_nome || 'Desconhecido'}</span>
-                              <span className="text-gray-400">em {new Date(acao.updated_at).toLocaleString('pt-BR')}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Ações */}
-                      <div className="flex gap-2 ml-4">
-                        <button 
-                          onClick={() => carregarParaEdicao(acao)}
-                          className="p-2 text-gray-500 hover:text-[#7114dd] hover:bg-[#7114dd]/10 rounded-lg transition"
-                          title="Editar"
-                        >
-                          <Pencil size={18} />
-                        </button>
-                        <button
-                          onClick={() => deleteAcao(acao.id)}
-                          className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                          title="Excluir"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {acoes.length === 0 && (
-          <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Calendar size={32} className="text-gray-400" />
-            </div>
-            <p className="text-gray-500 text-lg">Nenhuma ação encontrada.</p>
-            <p className="text-sm text-gray-400 mt-2">Clique em "Nova Ação" para criar sua primeira ação!</p>
+                {acoes.length > 10 && !mostrarMaisAcoes && (
+                  <button onClick={() => setMostrarMaisAcoes(true)} className="mt-4 text-purple-600 hover:text-purple-700 text-center w-full py-2">
+                    Mostrar mais ({acoes.length - 10} ações anteriores)
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
     </div>
   )
+}
+
+const LoadingSpinner = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+  </div>
+)
+
+const SemSetor = ({ userPerfilId, userNome }: { userPerfilId: string | null, userNome: string }) => (
+  <div className="min-h-screen flex items-center justify-center p-6">
+    <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
+      <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <Users className="w-8 h-8 text-red-500" />
+      </div>
+      <h2 className="text-2xl font-bold text-red-600 mb-4">Acesso Restrito</h2>
+      <p className="text-gray-600 mb-4">Você não está vinculado a nenhum setor.</p>
+      <div className="mt-4 p-3 bg-gray-100 rounded-lg text-left">
+        <p className="text-xs font-mono">ID: {userPerfilId}<br/>Nome: {userNome}</p>
+      </div>
+    </div>
+  </div>
+)
+
+const AcaoCard = ({ acao, setores, tiposAcoes, usuarios, onEdit, onDelete }: any) => {
+  const setorDaAcao = setores.find((s: any) => s.id === acao.setor_id)
+  const setoresEnvolvidos = setores.filter((s: any) => acao.setores_envolvidos?.includes(s.id))
+  
+  const getNomeExibicao = (nome: string) => {
+    if (nome && nome.trim()) return nome
+    const usuario = usuarios.find((u: any) => u.nome === nome || u.email === nome)
+    return usuario?.nome?.trim() || usuario?.email || nome
+  }
+  
+  const dataCriacao = acao.created_at ? new Date(acao.created_at) : null
+  const dataCriacaoFormatada = dataCriacao ? dataCriacao.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }) : ''
+  
+  const dataAtualizacao = acao.updated_at ? new Date(acao.updated_at) : null
+  const dataAtualizacaoFormatada = dataAtualizacao ? dataAtualizacao.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }) : ''
+  
+  const foiAtualizada = acao.updated_at && acao.updated_at !== acao.created_at
+  
+  return (
+    <div className="border rounded-xl p-5 hover:shadow-md transition">
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <h3 className="font-bold text-lg">{tiposAcoes.find((t: any) => t.id === acao.tipo_acao_id)?.nome || 'Sem tipo'}</h3>
+            <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(acao.status)}`}>{acao.status}</span>
+            {setorDaAcao && <span className="text-xs bg-gray-100 px-2 py-1 rounded-full">🏢 {setorDaAcao.nome}</span>}
+          </div>
+          
+          {acao.descricao && <p className="text-gray-600 mb-3">{acao.descricao}</p>}
+          
+          <div className="flex flex-wrap gap-4 mb-3 text-sm text-gray-500">
+            {acao.local && <span className="flex items-center gap-1"><MapPin size={14} /> {acao.local}</span>}
+            {acao.data_inicio && <span className="flex items-center gap-1"><Calendar size={14} /> Início: {formatarDataParaExibicaoLista(acao.data_inicio)}</span>}
+            {acao.data_fim && <span className="flex items-center gap-1"><Calendar size={14} /> Término: {formatarDataParaExibicaoLista(acao.data_fim)}</span>}
+            {acao.necessita_transporte && <span className="flex items-center gap-1 text-amber-600"><Truck size={14} /> Transporte</span>}
+          </div>
+          
+          {setoresEnvolvidos.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {setoresEnvolvidos.map((s: any) => <span key={s.id} className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">🏢 {s.nome}</span>)}
+            </div>
+          )}
+          
+          {acao.pessoas && acao.pessoas.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {acao.pessoas.map((p: string, idx: number) => (
+                <span key={idx} className="text-xs bg-gray-100 px-2 py-1 rounded-full">👤 {getNomeExibicao(p)}</span>
+              ))}
+            </div>
+          )}
+          
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <div className="flex flex-wrap gap-4 text-xs text-gray-400">
+              <div className="flex items-center gap-1.5">
+                <User size={12} className="text-purple-500" />
+                <span>Criado por: <span className="text-gray-600 font-medium">{acao.created_by_nome || 'Desconhecido'}</span></span>
+                <CalendarDays size={12} className="text-purple-500 ml-1" />
+                <span>em <span className="text-gray-600">{dataCriacaoFormatada}</span></span>
+              </div>
+              
+              {foiAtualizada && (
+                <div className="flex items-center gap-1.5">
+                  <User size={12} className="text-amber-500" />
+                  <span>Atualizado por: <span className="text-gray-600 font-medium">{acao.updated_by_nome || 'Desconhecido'}</span></span>
+                  <ClockIcon size={12} className="text-amber-500 ml-1" />
+                  <span>em <span className="text-gray-600">{dataAtualizacaoFormatada}</span></span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex gap-2 ml-4">
+          <button onClick={() => onEdit(acao)} className="p-2 text-gray-500 hover:text-purple-600 rounded-lg transition" title="Editar">
+            <Pencil size={18} />
+          </button>
+          <button onClick={() => onDelete(acao.id)} className="p-2 text-gray-500 hover:text-red-600 rounded-lg transition" title="Excluir">
+            <Trash2 size={18} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const getStatusColor = (status: string) => {
+  const colors: Record<string, string> = {
+    Realizada: 'bg-green-100 text-green-700',
+    Cancelada: 'bg-red-100 text-red-700',
+    Pendente: 'bg-yellow-100 text-yellow-700',
+    'Realizada Parcialmente': 'bg-blue-100 text-blue-700',
+    Reagendada: 'bg-purple-100 text-purple-700'
+  }
+  return colors[status] || 'bg-gray-100 text-gray-700'
+}
+
+const renderizarCampoExtra = (param: ParametroExtra, dadosExtras: any, setDadosExtras: any) => {
+  const valor = dadosExtras[param.label] ?? ''
+  const atualizar = (novoValor: any) => setDadosExtras((prev: any) => ({ ...prev, [param.label]: novoValor }))
+
+  switch (param.tipo) {
+    case 'text':
+      return <input type="text" value={valor} onChange={(e) => atualizar(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-purple-500" />
+    case 'number':
+      return <input type="number" value={valor} onChange={(e) => atualizar(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-purple-500" />
+    case 'boolean':
+      return (
+        <div className="flex gap-2">
+          <button onClick={() => atualizar(true)} className={`px-4 py-2 rounded-lg border transition ${valor === true ? 'bg-purple-600 text-white' : 'bg-white hover:bg-gray-50'}`}>Sim</button>
+          <button onClick={() => atualizar(false)} className={`px-4 py-2 rounded-lg border transition ${valor === false ? 'bg-amber-400 text-purple-900' : 'bg-white hover:bg-gray-50'}`}>Não</button>
+        </div>
+      )
+    case 'select':
+      return (
+        <select value={valor} onChange={(e) => atualizar(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+          <option value="">Selecione...</option>
+          {param.opcoes?.map(op => <option key={op} value={op}>{op}</option>)}
+        </select>
+      )
+    default:
+      return null
+  }
 }

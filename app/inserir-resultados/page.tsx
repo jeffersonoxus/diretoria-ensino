@@ -7,7 +7,8 @@ import {
   ChevronUp, Loader2, Target, BarChart3, Send, Clock
 } from 'lucide-react'
 import { 
-  validarCodigoAcesso, PERIODOS, HABILIDADES_FIXAS, getHabilidadesPorPeriodo
+  validarCodigoAcesso, PERIODOS, HABILIDADES_FIXAS, getHabilidadesPorPeriodo,
+  Habilidade
 } from '@/lib/dadosFixos'
 
 interface Escola {
@@ -28,6 +29,7 @@ interface Avaliacao {
   tipo_avaliacao: 'niveis' | 'habilidades'
   resultados_niveis: any
   resultados_habilidades: any
+  habilidades_selecionadas?: Record<string, string[]>
   created_at: string
 }
 
@@ -171,6 +173,9 @@ export default function InserirResultados() {
         const resultadosSalvos = avaliacaoEncontrada.resultados_habilidades?.[escolaEncontrada.codigo] || {}
         const novosDados: Record<string, DadosTurmaHabilidades> = {}
         
+        // Obter as habilidades selecionadas para esta avaliação
+        const habilidadesSelecionadas = avaliacaoEncontrada.habilidades_selecionadas || {}
+        
         for (const [periodo, turmasLista] of Object.entries(turmasDaEscola)) {
           const turmasArray = Array.isArray(turmasLista) ? turmasLista : []
           
@@ -179,7 +184,12 @@ export default function InserirResultados() {
             const dadosSalvos = resultadosSalvos[periodo]?.[turmaNome] || {}
             
             const habilidadesIniciais: Record<string, { quantidade: number; percentual: number }> = {}
-            const habilidadesDoPeriodo = HABILIDADES_FIXAS.filter(h => h.periodo === periodo)
+            
+            // Usar apenas as habilidades selecionadas para este período
+            const habilidadesDoPeriodo = HABILIDADES_FIXAS.filter(h => 
+              h.periodo === periodo && 
+              habilidadesSelecionadas[periodo]?.includes(h.id)
+            )
             
             for (const h of habilidadesDoPeriodo) {
               const habSalva = dadosSalvos.habilidades?.[h.codigo] || { quantidade: 0, percentual: 0 }
@@ -596,9 +606,6 @@ export default function InserirResultados() {
     setEnviando(true)
     
     try {
-      // Aqui você pode adicionar a lógica para enviar o diagnóstico
-      // Por exemplo, marcar como finalizado, enviar email, etc.
-      
       setSucesso('Diagnóstico enviado com sucesso! Todas as turmas foram preenchidas.')
       setTimeout(() => setSucesso(''), 5000)
       
@@ -609,6 +616,18 @@ export default function InserirResultados() {
     } finally {
       setEnviando(false)
     }
+  }
+
+  // Função para obter habilidades filtradas para exibição
+  function getHabilidadesParaExibicao(periodo: string): Habilidade[] {
+    if (!avaliacao?.habilidades_selecionadas) return []
+    
+    const habilidadesSelecionadasIds = avaliacao.habilidades_selecionadas[periodo] || []
+    
+    return HABILIDADES_FIXAS.filter(h => 
+      h.periodo === periodo && 
+      habilidadesSelecionadasIds.includes(h.id)
+    )
   }
 
   const dadosPorPeriodo = () => {
@@ -679,6 +698,11 @@ export default function InserirResultados() {
                       Avaliação: {avaliacao?.titulo} ({avaliacao?.ano}) - 
                       {avaliacao?.tipo_avaliacao === 'niveis' ? ' Por Níveis' : ' Por Habilidades'}
                     </p>
+                    {avaliacao?.tipo_avaliacao === 'habilidades' && avaliacao?.habilidades_selecionadas && (
+                      <p className="text-sm text-purple-600 mt-1">
+                        {Object.values(avaliacao.habilidades_selecionadas).flat().length} habilidades selecionadas para esta avaliação
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -760,7 +784,7 @@ export default function InserirResultados() {
               <div className="mb-6 p-3 bg-purple-50 rounded-xl">
                 <p className="text-sm text-purple-700 flex items-center gap-2">
                   <Target size={16} />
-                  Esta avaliação é do tipo <strong>Por Habilidades</strong>. Preencha a quantidade de acertos para cada habilidade.
+                  Esta avaliação é do tipo <strong>Por Habilidades</strong>. Preencha a quantidade de acertos para cada habilidade selecionada.
                 </p>
               </div>
             )}
@@ -982,133 +1006,149 @@ export default function InserirResultados() {
 
                     {expandidos[periodo] && avaliacao?.tipo_avaliacao === 'habilidades' && (
                       <div className="p-6 space-y-6">
-                        {(dadosPorPeriodo()[periodo] as DadosTurmaHabilidades[])?.map((item) => (
-                          <div key={`${item.periodo}_${item.turma}`} className={`border rounded-xl p-4 transition-all ${
-                            item.salvo 
-                              ? 'bg-green-50 border-green-300 shadow-sm' 
-                              : 'bg-yellow-50 border-yellow-300 shadow-sm'
-                          }`}>
-                            <div className="flex justify-between items-center mb-4">
-                              <div className="flex items-center gap-3">
-                                <h4 className="font-semibold text-lg">Turma {item.turma}</h4>
-                                {!item.salvo && (
-                                  <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full flex items-center gap-1">
-                                    <AlertCircle size={12} /> Pendente
-                                  </span>
+                        {(dadosPorPeriodo()[periodo] as DadosTurmaHabilidades[])?.map((item) => {
+                          const habilidadesExibicao = getHabilidadesParaExibicao(item.periodo)
+                          const habilidadesPortugues = habilidadesExibicao.filter(h => h.disciplina === 'Língua Portuguesa')
+                          const habilidadesMatematica = habilidadesExibicao.filter(h => h.disciplina === 'Matemática')
+                          
+                          return (
+                            <div key={`${item.periodo}_${item.turma}`} className={`border rounded-xl p-4 transition-all ${
+                              item.salvo 
+                                ? 'bg-green-50 border-green-300 shadow-sm' 
+                                : 'bg-yellow-50 border-yellow-300 shadow-sm'
+                            }`}>
+                              <div className="flex justify-between items-center mb-4">
+                                <div className="flex items-center gap-3">
+                                  <h4 className="font-semibold text-lg">Turma {item.turma}</h4>
+                                  {!item.salvo && (
+                                    <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full flex items-center gap-1">
+                                      <AlertCircle size={12} /> Pendente
+                                    </span>
+                                  )}
+                                  {item.salvo && (
+                                    <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full flex items-center gap-1">
+                                      <CheckCircle size={12} /> Salvo
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-xl">
+                                <div>
+                                  <label className="text-sm font-medium text-gray-700">Alunos Matriculados</label>
+                                  <input
+                                    type="number"
+                                    value={item.matriculados}
+                                    onChange={(e) => atualizarMatriculadosHabilidades(item.periodo, item.turma, parseInt(e.target.value) || 0)}
+                                    className="w-full mt-1 p-2 border rounded-lg"
+                                    min={0}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-700">Alunos Frequentando</label>
+                                  <input
+                                    type="number"
+                                    value={item.frequentando}
+                                    onChange={(e) => atualizarFrequentandoHabilidades(item.periodo, item.turma, parseInt(e.target.value) || 0)}
+                                    className="w-full mt-1 p-2 border rounded-lg"
+                                    min={0}
+                                    max={item.matriculados}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-700">Alunos Avaliados</label>
+                                  <input
+                                    type="number"
+                                    value={item.avaliados}
+                                    onChange={(e) => atualizarAvaliadosHabilidades(item.periodo, item.turma, parseInt(e.target.value) || 0)}
+                                    className="w-full mt-1 p-2 border rounded-lg"
+                                    min={0}
+                                    max={item.matriculados}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-6">
+                                {habilidadesPortugues.length > 0 && (
+                                  <div className="bg-blue-50 rounded-xl p-4">
+                                    <h5 className="font-medium text-blue-800 mb-3">Habilidades - Língua Portuguesa</h5>
+                                    {habilidadesPortugues.map((habilidade) => {
+                                      const habData = item.habilidades[habilidade.codigo] || { quantidade: 0, percentual: 0 }
+                                      return (
+                                        <div key={habilidade.codigo} className="mb-4 last:mb-0">
+                                          <label className="text-sm font-medium text-gray-700 block mb-1">
+                                            {habilidade.codigo} - {habilidade.descricao}
+                                          </label>
+                                          <div className="flex gap-4 items-center">
+                                            <input
+                                              type="number"
+                                              value={habData.quantidade}
+                                              onChange={(e) => atualizarHabilidade(item.periodo, item.turma, habilidade.codigo, parseInt(e.target.value) || 0)}
+                                              className="w-32 p-2 border rounded-lg"
+                                              min={0}
+                                              max={item.avaliados}
+                                              placeholder="Quantidade"
+                                            />
+                                            <span className="text-sm text-gray-500">
+                                              {item.avaliados > 0 ? ((habData.quantidade / item.avaliados) * 100).toFixed(1) : 0}% de acerto
+                                            </span>
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
                                 )}
-                                {item.salvo && (
-                                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full flex items-center gap-1">
-                                    <CheckCircle size={12} /> Salvo
-                                  </span>
+
+                                {habilidadesMatematica.length > 0 && (
+                                  <div className="bg-purple-50 rounded-xl p-4">
+                                    <h5 className="font-medium text-purple-800 mb-3">Habilidades - Matemática</h5>
+                                    {habilidadesMatematica.map((habilidade) => {
+                                      const habData = item.habilidades[habilidade.codigo] || { quantidade: 0, percentual: 0 }
+                                      return (
+                                        <div key={habilidade.codigo} className="mb-4 last:mb-0">
+                                          <label className="text-sm font-medium text-gray-700 block mb-1">
+                                            {habilidade.codigo} - {habilidade.descricao}
+                                          </label>
+                                          <div className="flex gap-4 items-center">
+                                            <input
+                                              type="number"
+                                              value={habData.quantidade}
+                                              onChange={(e) => atualizarHabilidade(item.periodo, item.turma, habilidade.codigo, parseInt(e.target.value) || 0)}
+                                              className="w-32 p-2 border rounded-lg"
+                                              min={0}
+                                              max={item.avaliados}
+                                              placeholder="Quantidade"
+                                            />
+                                            <span className="text-sm text-gray-500">
+                                              {item.avaliados > 0 ? ((habData.quantidade / item.avaliados) * 100).toFixed(1) : 0}% de acerto
+                                            </span>
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+
+                                {habilidadesExibicao.length === 0 && (
+                                  <div className="text-center py-4 text-gray-500">
+                                    <p>Nenhuma habilidade foi selecionada para este período.</p>
+                                  </div>
                                 )}
                               </div>
-                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-xl">
-                              <div>
-                                <label className="text-sm font-medium text-gray-700">Alunos Matriculados</label>
-                                <input
-                                  type="number"
-                                  value={item.matriculados}
-                                  onChange={(e) => atualizarMatriculadosHabilidades(item.periodo, item.turma, parseInt(e.target.value) || 0)}
-                                  className="w-full mt-1 p-2 border rounded-lg"
-                                  min={0}
-                                />
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium text-gray-700">Alunos Frequentando</label>
-                                <input
-                                  type="number"
-                                  value={item.frequentando}
-                                  onChange={(e) => atualizarFrequentandoHabilidades(item.periodo, item.turma, parseInt(e.target.value) || 0)}
-                                  className="w-full mt-1 p-2 border rounded-lg"
-                                  min={0}
-                                  max={item.matriculados}
-                                />
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium text-gray-700">Alunos Avaliados</label>
-                                <input
-                                  type="number"
-                                  value={item.avaliados}
-                                  onChange={(e) => atualizarAvaliadosHabilidades(item.periodo, item.turma, parseInt(e.target.value) || 0)}
-                                  className="w-full mt-1 p-2 border rounded-lg"
-                                  min={0}
-                                  max={item.matriculados}
-                                />
+                              <div className="mt-4 flex justify-end">
+                                <button
+                                  onClick={() => salvarTurmaHabilidades(item.periodo, item.turma)}
+                                  disabled={salvando}
+                                  className="bg-green-600 text-white px-6 py-2 rounded-xl hover:bg-green-700 transition flex items-center gap-2"
+                                >
+                                  <Save size={18} />
+                                  {item.salvo ? 'Atualizar Resultados' : 'Salvar Resultados da Turma'}
+                                </button>
                               </div>
                             </div>
-
-                            <div className="space-y-6">
-                              <div className="bg-blue-50 rounded-xl p-4">
-                                <h5 className="font-medium text-blue-800 mb-3">Habilidades - Língua Portuguesa</h5>
-                                {getHabilidadesPorPeriodo('Língua Portuguesa', item.periodo).map((habilidade) => {
-                                  const habData = item.habilidades[habilidade.codigo] || { quantidade: 0, percentual: 0 }
-                                  return (
-                                    <div key={habilidade.codigo} className="mb-4 last:mb-0">
-                                      <label className="text-sm font-medium text-gray-700 block mb-1">
-                                        {habilidade.codigo} - {habilidade.descricao}
-                                      </label>
-                                      <div className="flex gap-4 items-center">
-                                        <input
-                                          type="number"
-                                          value={habData.quantidade}
-                                          onChange={(e) => atualizarHabilidade(item.periodo, item.turma, habilidade.codigo, parseInt(e.target.value) || 0)}
-                                          className="w-32 p-2 border rounded-lg"
-                                          min={0}
-                                          max={item.avaliados}
-                                          placeholder="Quantidade"
-                                        />
-                                        <span className="text-sm text-gray-500">
-                                          {item.avaliados > 0 ? ((habData.quantidade / item.avaliados) * 100).toFixed(1) : 0}% de acerto
-                                        </span>
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-
-                              <div className="bg-purple-50 rounded-xl p-4">
-                                <h5 className="font-medium text-purple-800 mb-3">Habilidades - Matemática</h5>
-                                {getHabilidadesPorPeriodo('Matemática', item.periodo).map((habilidade) => {
-                                  const habData = item.habilidades[habilidade.codigo] || { quantidade: 0, percentual: 0 }
-                                  return (
-                                    <div key={habilidade.codigo} className="mb-4 last:mb-0">
-                                      <label className="text-sm font-medium text-gray-700 block mb-1">
-                                        {habilidade.codigo} - {habilidade.descricao}
-                                      </label>
-                                      <div className="flex gap-4 items-center">
-                                        <input
-                                          type="number"
-                                          value={habData.quantidade}
-                                          onChange={(e) => atualizarHabilidade(item.periodo, item.turma, habilidade.codigo, parseInt(e.target.value) || 0)}
-                                          className="w-32 p-2 border rounded-lg"
-                                          min={0}
-                                          max={item.avaliados}
-                                          placeholder="Quantidade"
-                                        />
-                                        <span className="text-sm text-gray-500">
-                                          {item.avaliados > 0 ? ((habData.quantidade / item.avaliados) * 100).toFixed(1) : 0}% de acerto
-                                        </span>
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            </div>
-
-                            <div className="mt-4 flex justify-end">
-                              <button
-                                onClick={() => salvarTurmaHabilidades(item.periodo, item.turma)}
-                                disabled={salvando}
-                                className="bg-green-600 text-white px-6 py-2 rounded-xl hover:bg-green-700 transition flex items-center gap-2"
-                              >
-                                <Save size={18} />
-                                {item.salvo ? 'Atualizar Resultados' : 'Salvar Resultados da Turma'}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     )}
                   </div>

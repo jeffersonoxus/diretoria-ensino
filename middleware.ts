@@ -1,3 +1,4 @@
+// middleware.ts
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -35,17 +36,26 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+  const { pathname } = request.nextUrl
+
+  // Rotas públicas (acessíveis sem login)
+  const publicRoutes = ['/', '/login', '/cadastro', '/auth/callback']
+  const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith('/auth/'))
 
   // Rotas protegidas
-  if (request.nextUrl.pathname.startsWith('/dashboard')) {
-    if (!user) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
+  const protectedRoutes = ['/dien', '/admin']
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
+
+  // Redirecionar para login se tentar acessar rota protegida sem estar logado
+  if (isProtectedRoute && !user) {
+    const redirectUrl = new URL('/login', request.url)
+    redirectUrl.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(redirectUrl)
   }
 
-  // Redirecionar usuários logados das páginas de auth
-  if (user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/cadastro')) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+  // Redirecionar para /dien se estiver logado e tentar acessar login/cadastro
+  if (user && (pathname === '/login' || pathname === '/cadastro')) {
+    return NextResponse.redirect(new URL('/dien', request.url))
   }
 
   return response
