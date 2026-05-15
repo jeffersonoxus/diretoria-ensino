@@ -362,7 +362,7 @@ export default function ResponderAcaoPage() {
             
             {/* Botão Home */}
             <button
-              onClick={() => router.push('/dien')}
+              onClick={() => router.push('/agenda')}
               className="p-2 hover:bg-gray-100 rounded-full transition"
             >
               <Home size={24} className="text-gray-600" />

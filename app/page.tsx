@@ -19,10 +19,10 @@ export default async function HomePage() {
         </div>
         {user && (
           <Link
-            href="/dien"
+            href="/agenda"
             className="bg-purple-600 text-white px-4 py-2 sm:px-6 sm:py-2.5 rounded-full hover:bg-purple-700 transition-all shadow-md text-sm sm:text-base"
           >
-            Dashboard
+            Agenda
           </Link>
         )}
       </nav>
@@ -72,10 +72,10 @@ export default async function HomePage() {
                 Olá, {user.email}!
               </h2>
               <Link
-                href="/dien"
+                href="/agenda"
                 className="inline-block bg-purple-600 text-white px-6 py-3 sm:px-8 sm:py-3 rounded-xl font-semibold hover:bg-purple-700 transition-all w-full sm:w-auto shadow-md"
               >
-                Acessar Dashboard
+                Acessar Agenda
               </Link>
             </div>
           )}

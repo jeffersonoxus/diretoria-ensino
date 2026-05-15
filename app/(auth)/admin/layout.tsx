@@ -19,7 +19,7 @@ export default async function AdminLayout({
   const isAdmin = user.email === 'admin@exemplo.com' || user.email === 'jeffersonoxus@gmail.com'
   
   if (!isAdmin) {
-    redirect('/dien') // Redireciona usuários não-admin
+    redirect('/agenda') // Redireciona usuários não-admin
   }
 
   return (

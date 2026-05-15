@@ -54,7 +54,7 @@ function LoginForm() {
 
       if (error) throw error;
 
-      router.push('/dien');
+      router.push('/agenda');
       router.refresh();
     } catch (error: any) {
       if (error.message.includes('Email not confirmed')) {
@@ -68,7 +68,7 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50 flex flex-col justify-center px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen text-gray-700 bg-linear-to-br from-purple-50 via-white to-purple-50 flex flex-col justify-center px-4 py-12 sm:px-6 lg:px-8">
       {/* Logo */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center mb-8">
         <div className="flex justify-center mb-4">
@@ -146,7 +146,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-50">Carregando...</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-linear-to-br from-purple-50 via-white to-purple-50">Carregando...</div>}>
       <LoginForm />
     </Suspense>
   );

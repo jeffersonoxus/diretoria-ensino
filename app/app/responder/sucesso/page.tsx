@@ -50,7 +50,7 @@ function SucessoContent() {
       
       <div className="space-y-3">
         <button
-          onClick={() => router.push('/dien')}
+          onClick={() => router.push('/agenda')}
           className="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition flex items-center justify-center gap-2"
         >
           <Home size={20} />

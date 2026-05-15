@@ -116,10 +116,10 @@ export const Sidebar = () => {
     // ADMIN: mostra todos os menus (mesmo sem setor)
     if (isAdmin) {
       return [
-        { href: '/dien', icon: Home, label: 'Dashboard', show: true },
-        { href: '/dien/perfil', icon: User, label: 'Meu Perfil', show: true },
-        { href: '/dien/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
-        { href: '/dien/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
+        { href: '/agenda', icon: Home, label: 'Agenda', show: true },
+        { href: '/agenda/perfil', icon: User, label: 'Meu Perfil', show: true },
+        { href: '/agenda/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
+        { href: '/agenda/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
         { href: '/app', icon: Smartphone, label: 'App Mobile', show: temSetor, external: true },
       ]
     }
@@ -127,16 +127,16 @@ export const Sidebar = () => {
     // Se NÃO tem setor, mostra APENAS o perfil
     if (!temSetor && !loadingSetor) {
       return [
-        { href: '/dien/perfil', icon: User, label: 'Meu Perfil', show: true }
+        { href: '/agenda/perfil', icon: User, label: 'Meu Perfil', show: true }
       ]
     }
 
     // Se TEM setor, mostra todos os menus normais
     return [
-      { href: '/dien', icon: Home, label: 'Dashboard', show: true },
-      { href: '/dien/perfil', icon: User, label: 'Meu Perfil', show: true },
-      { href: '/dien/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
-      { href: '/dien/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
+      { href: '/agenda', icon: Home, label: 'Agenda', show: true },
+      { href: '/agenda/perfil', icon: User, label: 'Meu Perfil', show: true },
+      { href: '/agenda/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
+      { href: '/agenda/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
       { href: '/app', icon: Smartphone, label: 'App Mobile', show: temSetor, external: true },
     ]
   }

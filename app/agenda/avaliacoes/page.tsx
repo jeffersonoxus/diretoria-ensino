@@ -158,7 +158,7 @@ export default function AvaliacoesPage() {
 
   useEffect(() => {
     if (!loadingSetor && !isSetorEJA) {
-      router.push('/dien')
+      router.push('/agenda')
     }
   }, [loadingSetor, isSetorEJA, router])
 

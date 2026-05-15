@@ -225,7 +225,7 @@ export default function AppMobilePage() {
       <div className="bg-white border-b border-gray-100 px-4 py-6 sticky top-0 z-10 shadow-sm">
         {/* Botão Home */}
         <button
-          onClick={() => router.push('/dien')}
+          onClick={() => router.push('/agenda')}
           className="absolute top-6 right-4 p-2 hover:bg-gray-100 rounded-full transition"
         >
           <Home size={24} className="text-gray-600" />

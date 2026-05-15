@@ -1,4 +1,4 @@
-// app/(auth)/dien/page.tsx
+// app/(auth)/agenda/page.tsx
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
@@ -8,31 +8,14 @@ import {
   Calendar, CheckCircle, AlertCircle, TrendingUp, Users, Building2, 
   Sunrise, Sun, Moon, Package, Filter, X, ChevronDown, ChevronUp, 
   MapPin, Clock, Settings, Eye, Car, Printer, Download, PlusCircle,
-  User, CalendarDays, School, List, LogOut
+  User, CalendarDays, School, List, LogOut, Plus
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import Modal from '@/components/Modal'
+import FormNovaAcao from '@/components/FormNovaAcao'
+import type { TipoAcao } from '@/components/FormNovaAcao'
 
-interface TipoAcao {
-  id: string
-  nome: string
-  setores_ids: string[]
-  parametros_extras: Array<{
-    id: string
-    label: string
-    tipo: string
-    opcoes?: string[]
-  }>
-}
-
-interface Local {
-  id: string
-  nome: string
-  tipo: string
-  endereco?: string
-  ativo: boolean
-}
-
-export default function DashboardPage() {
+export default function AgendaPage() {
   const supabase = createClient()
   const router = useRouter()
   const printRef = useRef<HTMLDivElement>(null)
@@ -53,6 +36,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [mostrarImpressao, setMostrarImpressao] = useState(false)
+  const [mostrarTransporteRelatorio, setMostrarTransporteRelatorio] = useState(false)
   
   // Filtros de impressão
   const [tipoRelatorio, setTipoRelatorio] = useState<'todas' | 'porSetor' | 'porAcao' | 'porSetorEAcao'>('todas')
@@ -89,6 +73,7 @@ export default function DashboardPage() {
   const [mostrarFiltrosExtras, setMostrarFiltrosExtras] = useState(false)
   const [expandirGraficosExtras, setExpandirGraficosExtras] = useState(false)
   const [modalAcao, setModalAcao] = useState<any>(null)
+  const [modalNovaAcao, setModalNovaAcao] = useState<{ dia: Date; turno: string } | null>(null)
 
   // ===== FUNÇÃO DE LOGOUT =====
   const handleLogout = async () => {
@@ -218,6 +203,11 @@ export default function DashboardPage() {
     return 'Noite'
   }
 
+  const formatarDataParaPreenchimento = (dia: Date, turno: string): string => {
+    const hora = turno === 'Manhã' ? '08:00' : turno === 'Tarde' ? '14:00' : '19:00'
+    return `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, '0')}-${String(dia.getDate()).padStart(2, '0')}T${hora}`
+  }
+
   const turnos = ['Manhã', 'Tarde', 'Noite']
 
   // Tipos de ação disponíveis para o setor selecionado
@@ -343,6 +333,20 @@ export default function DashboardPage() {
   const acoesComTransporte = useMemo(() => {
     return acoesFiltradas.filter(a => a.necessita_transporte === true)
   }, [acoesFiltradas])
+
+  // Ações da semana ativa que necessitam de transporte
+  const acoesTransporte = useMemo(() => {
+    const fimSemana = new Date(semanaInicio)
+    fimSemana.setDate(fimSemana.getDate() + 7)
+    fimSemana.setHours(23, 59, 59, 999)
+    
+    return acoesFiltradas.filter(a => {
+      if (!a.necessita_transporte) return false
+      if (!a.data_inicio) return false
+      const data = new Date(a.data_inicio)
+      return data >= semanaInicio && data <= fimSemana
+    })
+  }, [acoesFiltradas, semanaInicio])
 
   // Mapa de ações por dia e turno
   const acoesPorDiaTurno = useMemo(() => {
@@ -549,6 +553,94 @@ export default function DashboardPage() {
     document.body.removeChild(link)
   }
 
+  const handlePrintTransporte = () => {
+    if (acoesTransporte.length === 0) return
+
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+
+    const dados = acoesTransporte.map((acao, index) => {
+      const tipo = tiposAcoes.find(t => t.id === acao.tipo_acao_id)?.nome || 'N/A'
+      const setor = setores.find(s => s.id === acao.setor_id)?.nome || 'N/A'
+      const dataInicio = acao.data_inicio ? new Date(acao.data_inicio) : null
+      const dataFim = acao.data_fim ? new Date(acao.data_fim) : null
+      const horaInicio = dataInicio ? dataInicio.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'N/A'
+      const horaFim = dataFim ? dataFim.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'N/A'
+      const qtdPessoas = acao.pessoas?.length || 0
+      const responsavel = getUsuarioNome(acao.created_by)
+      
+      return {
+        numero: index + 1,
+        data: dataInicio ? dataInicio.toLocaleDateString('pt-BR') : 'N/A',
+        local: acao.local || 'N/A',
+        horaInicio,
+        horaFim,
+        qtdPessoas,
+        finalidade: tipo,
+        responsavel
+      }
+    })
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Relatório de Transporte</title>
+          <meta charset="utf-8" />
+          <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            body { font-family: Arial, sans-serif; margin: 0; padding: 0; font-size: 11px; }
+            .header { text-align: center; margin-bottom: 15px; }
+            .header h1 { color: #b45309; margin: 0; font-size: 20px; }
+            .header p { color: #666; margin: 2px 0; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #d4d4d4; padding: 5px 6px; text-align: left; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; }
+            th { background-color: #b45309; color: white; font-weight: bold; font-size: 10px; }
+            tr:nth-child(even) { background-color: #fef7ed; }
+            .footer { text-align: center; margin-top: 20px; padding-top: 8px; border-top: 1px solid #d4d4d4; font-size: 11px; color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Relatório de Transporte</h1>
+            <p>Semana de ${semanaInicio.toLocaleDateString('pt-BR')} a ${new Date(semanaInicio.getTime() + 6 * 86400000).toLocaleDateString('pt-BR')}</p>
+            <p>Data de emissão: ${new Date().toLocaleString('pt-BR')}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Data da solicitação</th><th>Local de destino</th><th>Horário previsto de saída</th><th>Horário previsto de retorno</th><th>Quantidade de pessoas</th><th>Finalidade da demanda</th><th>Responsável pela solicitação</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${dados.map(d => `
+                <tr>
+                  <td>${d.numero}</td>
+                  <td>${d.data}</td>
+                  <td>${d.local}</td>
+                  <td>${d.horaInicio}</td>
+                  <td>${d.horaFim}</td>
+                  <td style="text-align:center">${d.qtdPessoas}</td>
+                  <td>${d.finalidade}</td>
+                  <td>${d.responsavel}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <div class="footer">
+            <p>Total de solicitações de transporte: ${dados.length}</p>
+            <p>Sistema de Gerenciamento de Ações - DIEN</p>
+          </div>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+    setTimeout(() => {
+      printWindow.print()
+    }, 300)
+    setMostrarTransporteRelatorio(false)
+  }
+
   // Gráficos
   const dadosStatus = useMemo(() => {
     const statusMap: Record<string, { name: string, value: number, color: string }> = {
@@ -700,8 +792,8 @@ export default function DashboardPage() {
         >
           <LogOut size={18} /> Sair
         </button>
+        </div>
       </div>
-    </div>
   )
 
   // ===== VERIFICAÇÃO DE ACESSO =====
@@ -731,13 +823,13 @@ export default function DashboardPage() {
     )
   }
 
-  // ===== RENDERIZAÇÃO PRINCIPAL DO DASHBOARD =====
+  // ===== RENDERIZAÇÃO PRINCIPAL DO AGENDA =====
   return (
     <div className="space-y-6 p-6 text-slate-700 bg-gradient-to-br from-purple-50 via-white to-indigo-50 min-h-screen">
       {/* Header com botão de logout */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Dashboard de Ações</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Agenda de Ações</h1>
           <p className="text-gray-500 text-sm mt-1">
             Visão geral das atividades • {userNome} • 
             Setor(es): {setores.map(s => s.nome).join(', ')}
@@ -747,6 +839,10 @@ export default function DashboardPage() {
           <button onClick={() => setMostrarImpressao(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition shadow-sm">
             <Printer size={18} className="text-gray-500" />
             <span className="text-sm font-medium">Relatórios</span>
+          </button>
+          <button onClick={() => setMostrarTransporteRelatorio(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition shadow-sm">
+            <Car size={18} className="text-blue-600" />
+            <span className="text-sm font-medium">Relatório de Transporte</span>
           </button>
           <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition shadow-sm">
             <Filter size={18} className="text-gray-500" />
@@ -763,8 +859,8 @@ export default function DashboardPage() {
 
       {/* Modal de Impressão/Relatório */}
       {mostrarImpressao && (
-        <div className="fixed inset-0 bg-black/10 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/10 backdrop-blur-[1px] flex items-center justify-center z-50 p-4" onClick={() => setMostrarImpressao(false)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-white z-10">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                 <Printer size={24} className="text-purple-600" />
@@ -840,6 +936,83 @@ export default function DashboardPage() {
               </div>
               
               <button onClick={limparFiltrosRelatorio} className="w-full text-sm text-gray-500 hover:text-red-500 transition flex items-center justify-center gap-1"><X size={14} /> Limpar todos os filtros</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Relatório de Transporte */}
+      {mostrarTransporteRelatorio && (
+        <div className="fixed inset-0 bg-black/10 backdrop-blur-[1px] flex items-center justify-center z-50 p-4" onClick={() => setMostrarTransporteRelatorio(false)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-white z-10">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <Car size={24} className="text-blue-600" />
+                Relatório de Transporte
+              </h2>
+              <button onClick={() => setMostrarTransporteRelatorio(false)} className="text-gray-500 hover:text-gray-700"><X size={24} /></button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800">
+                  <strong>Semana:</strong> {semanaInicio.toLocaleDateString('pt-BR')} a {new Date(semanaInicio.getTime() + 6 * 86400000).toLocaleDateString('pt-BR')}
+                </p>
+                <p className="text-sm text-blue-800 mt-1">
+                  <strong>Ações com transporte:</strong> {acoesTransporte.length}
+                </p>
+              </div>
+
+              {acoesTransporte.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <Car size={48} className="mx-auto mb-4 opacity-30" />
+                  <p className="text-lg font-medium">Nenhuma ação com transporte nesta semana</p>
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-blue-600 text-white">
+                          <th className="p-3 text-left rounded-tl-lg">#</th>
+                          <th className="p-3 text-left">Data da solicitação</th>
+                          <th className="p-3 text-left">Local de destino</th>
+                          <th className="p-3 text-left">Horário previsto de saída</th>
+                          <th className="p-3 text-left">Horário previsto de retorno</th>
+                          <th className="p-3 text-center">Quantidade de pessoas</th>
+                          <th className="p-3 text-left">Finalidade da demanda</th>
+                          <th className="p-3 text-left rounded-tr-lg">Responsável pela solicitação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {acoesTransporte.map((acao, index) => {
+                          const tipo = tiposAcoes.find(t => t.id === acao.tipo_acao_id)?.nome || 'N/A'
+                          const dataInicio = acao.data_inicio ? new Date(acao.data_inicio) : null
+                          const dataFim = acao.data_fim ? new Date(acao.data_fim) : null
+                          return (
+                            <tr key={acao.id} className="border-b hover:bg-blue-50/50 transition">
+                              <td className="p-3 font-medium">{index + 1}</td>
+                              <td className="p-3">{dataInicio ? dataInicio.toLocaleDateString('pt-BR') : 'N/A'}</td>
+                              <td className="p-3 font-medium">{acao.local || 'N/A'}</td>
+                              <td className="p-3">{dataInicio ? dataInicio.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</td>
+                              <td className="p-3">{dataFim ? dataFim.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</td>
+                              <td className="p-3 text-center font-bold">{acao.pessoas?.length || 0}</td>
+                              <td className="p-3">{tipo}</td>
+                              <td className="p-3">{getUsuarioNome(acao.created_by)}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex gap-3 pt-4 border-t">
+                    <button onClick={handlePrintTransporte} className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 font-medium">
+                      <Printer size={18} /> Imprimir PDF
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -939,30 +1112,30 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 </div>
-              )}
-            </div>
           )}
         </div>
       )}
+        </div>
+    )}
 
       {/* Cards Resumo */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-purple-600"><div><p className="text-gray-700 font-bold text-sm">Total de Ações</p><p className="text-3xl font-bold text-gray-800">{acoesFiltradas.length}</p></div><Calendar size={32} className="float-right text-purple-600 opacity-50" /></div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-green-500"><div><p className="text-gray-700 font-bold text-sm">Ações Realizadas</p><p className="text-3xl font-bold text-green-600">{acoesFiltradas.filter(a => a.status === 'Realizada' || a.status === 'Realizada Parcialmente').length}</p></div><CheckCircle size={32} className="float-right text-green-500" /></div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-yellow-400"><div><p className="text-gray-700 font-bold text-sm">Ações Pendentes</p><p className="text-3xl font-bold text-yellow-500">{acoesFiltradas.filter(a => a.status === 'Pendente' || a.status === 'Reagendada').length}</p></div><AlertCircle size={32} className="float-right text-yellow-400" /></div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-blue-500"><div><p className="text-gray-700 font-bold text-sm">Ações com Transporte</p><p className="text-3xl font-bold text-blue-600">{acoesComTransporte.length}</p></div><Car size={32} className="float-right text-blue-500" /></div>
+        <div className="bg-white rounded-xl p-3 shadow-sm border-l-4 border-purple-600"><div><p className="text-gray-700 font-bold text-sm">Total de Ações</p><p className="text-2xl font-bold text-gray-800">{acoesFiltradas.length}</p></div><Calendar size={24} className="float-right text-purple-600 opacity-50" /></div>
+        <div className="bg-white rounded-xl p-3 shadow-sm border-l-4 border-green-500"><div><p className="text-gray-700 font-bold text-sm">Ações Realizadas</p><p className="text-2xl font-bold text-green-600">{acoesFiltradas.filter(a => a.status === 'Realizada' || a.status === 'Realizada Parcialmente').length}</p></div><CheckCircle size={24} className="float-right text-green-500" /></div>
+        <div className="bg-white rounded-xl p-3 shadow-sm border-l-4 border-amber-400"><div><p className="text-gray-700 font-bold text-sm">Ações Pendentes</p><p className="text-2xl font-bold text-amber-500">{acoesFiltradas.filter(a => a.status === 'Pendente' || a.status === 'Reagendada').length}</p></div><AlertCircle size={24} className="float-right text-amber-400" /></div>
+        <div className="bg-white rounded-xl p-3 shadow-sm border-l-4 border-blue-500"><div><p className="text-gray-700 font-bold text-sm">Ações com Transporte</p><p className="text-2xl font-bold text-blue-600">{acoesComTransporte.length}</p></div><Car size={24} className="float-right text-blue-500" /></div>
       </div>
 
       {/* AGENDA SEMANAL */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-200 bg-white">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><h2 className="font-semibold text-gray-800 flex items-center gap-2"><Calendar size={20} className="text-purple-700" />Agenda Semanal</h2><p className="text-xs text-gray-500 mt-1">{semanaInicio.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })} — {new Date(semanaInicio.getTime() + 6 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p></div>
+            <div><h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2"><Calendar size={20} className="text-purple-700" />Agenda Semanal</h2><p className="text-sm text-gray-500 mt-1">{semanaInicio.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })} — {new Date(semanaInicio.getTime() + 6 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p></div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2"><Building2 size={14} className="text-gray-400" /><select value={filterSetor} onChange={(e) => handleSetorChange(e.target.value)} className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white"><option value="todos">Todos os setores</option>{setores.map(setor => <option key={setor.id} value={setor.id}>{setor.nome}</option>)}</select></div>
               <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                 <button onClick={semanaAnterior} className={`px-2 py-1.5 text-sm rounded-md hover:bg-white transition ${!podeNavegar('anterior') && 'opacity-50 cursor-not-allowed'}`} disabled={!podeNavegar('anterior')}>←</button>
-                <button onClick={semanaAtual} className="px-3 py-1.5 text-xs rounded-md bg-purple-600 text-white shadow-sm">Hoje</button>
+                <button onClick={semanaAtual} className="px-3 py-1.5 text-sm rounded-md bg-purple-600 text-white shadow-sm">Hoje</button>
                 <button onClick={proximaSemana} className={`px-2 py-1.5 text-sm rounded-md hover:bg-white transition ${!podeNavegar('proximo') && 'opacity-50 cursor-not-allowed'}`} disabled={!podeNavegar('proximo')}>→</button>
               </div>
             </div>
@@ -972,17 +1145,21 @@ export default function DashboardPage() {
         <div className="overflow-x-auto">
           <div className="min-w-[800px]">
             <div className="grid" style={{ gridTemplateColumns: `90px repeat(7, 1fr)` }}>
-              <div className="p-3 bg-gray-100 border-b border-gray-300 font-semibold text-gray-600 text-xs uppercase tracking-wider">Turno</div>
+              <div className="p-3 bg-gray-100 border-b border-gray-300 font-semibold text-gray-600 text-sm uppercase tracking-wider">Turno</div>
               {diasDaSemana.map((dia, idx) => {
                 const isToday = dia.toDateString() === new Date().toDateString()
-                return (<div key={idx} className={`p-3 text-center border-b border-gray-300 ${isToday ? 'bg-purple-100' : 'bg-gray-100'}`}><p className="text-xs font-semibold text-gray-500 uppercase">{dia.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</p><p className={`text-base font-bold mt-1 ${isToday ? 'text-purple-700' : 'text-gray-700'}`}>{dia.getDate()}</p></div>)
+                return (<div key={idx} onClick={() => setModalNovaAcao({ dia, turno: 'Manhã' })} className={`p-3 text-center border-b border-gray-300 ${isToday ? 'bg-purple-100' : 'bg-gray-100'} cursor-pointer hover:bg-purple-200 transition-colors group relative`} title="Clique para criar uma ação nesta data"><p className="text-sm font-semibold text-gray-500 uppercase group-hover:text-purple-700">{dia.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</p><p className={`text-lg font-bold mt-1 ${isToday ? 'text-purple-700' : 'text-gray-700'} group-hover:text-purple-700`}>{dia.getDate()}</p><span className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"><Plus size={12} className="text-purple-500" /></span></div>)
               })}
             </div>
 
             {turnos.map((turno, turnoIndex) => {
               const bgColor = turnoIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'
               return (
-                <div key={turno} className="grid" style={{ gridTemplateColumns: `90px repeat(7, 1fr)` }}>
+                <div
+                  key={turno}
+                  className="grid"
+                  style={{ gridTemplateColumns: `90px repeat(7, 1fr)` }}
+                >
                   <div className={`p-3 flex items-center justify-center gap-2 text-sm font-medium border-b border-gray-200 ${bgColor}`}>
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${turno === 'Manhã' ? 'bg-blue-100 text-blue-600' : turno === 'Tarde' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600'}`}>
                       {turno === 'Manhã' && <Sun size={16} />}{turno === 'Tarde' && <Sun size={16} />}{turno === 'Noite' && <Moon size={16} />}
@@ -996,7 +1173,7 @@ export default function DashboardPage() {
                     const isToday = dia.toDateString() === new Date().toDateString()
                     
                     return (
-                      <div key={idx} className={`p-1.5 border-b border-gray-200 ${idx !== 6 ? 'border-r border-gray-100' : ''} ${bgColor} ${isToday ? 'border-l-2 border-l-purple-400' : ''}`}>
+                      <div key={idx} onClick={() => setModalNovaAcao({ dia, turno })} className={`p-1.5 border-b border-gray-200 ${idx !== 6 ? 'border-r border-gray-100' : ''} ${bgColor} ${isToday ? 'ring-2 ring-inset ring-purple-400' : ''} cursor-pointer hover:bg-purple-50/50 transition-colors`}>
                         <div className="space-y-1.5 min-h-[130px]">
                           {acoesNoTurno.length === 0 ? (<div className="h-full flex items-center justify-center py-6"><div className="w-1 h-1 rounded-full bg-gray-300"></div></div>) : (
                             acoesNoTurno.map((acao, acaoIdx) => {
@@ -1007,11 +1184,11 @@ export default function DashboardPage() {
                               const borderColor = acao.status === 'Realizada' ? 'border-l-green-500' : acao.status === 'Realizada Parcialmente' ? 'border-l-blue-500' : acao.status === 'Cancelada' ? 'border-l-red-500' : acao.status === 'Reagendada' ? 'border-l-purple-500' : 'border-l-amber-500'
                               
                               return (
-                                <div key={acaoIdx} onClick={() => setModalAcao(acaoOriginal)} className={`rounded-md p-2 text-xs border-l-4 ${borderColor} bg-white shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-[1.02]`}>
-                                  <div className="flex items-center justify-between mb-1.5"><div className="flex flex-1 items-center justify-between gap-1 text-gray-400"><Clock size={10} className="text-gray-700" /><span className="text-[10px] font-mono font-medium text-gray-600">{acao.horario}</span>{acao.status === 'Pendente' && <span className="ml-auto text-amber-500 font-bold">Pendente</span>}{acao.status === 'Realizada' && <span className="ml-auto text-green-500 font-bold">Realizada</span>}{acao.status === 'Cancelada' && <span className="ml-auto text-red-500 font-bold">Cancelada</span>}</div></div>
-                                  <p className="text-[11px] font-semibold text-gray-800 mb-1 line-clamp-2 leading-tight">{nomeTipo.length > 30 ? nomeTipo.substring(0, 20) + '…' : nomeTipo}</p>
-                                  {acao.local && (<div className="flex items-center gap-1 mb-1 text-gray-700"><MapPin size={9} /><span className="text-[9px] truncate">{acao.local.length > 22 ? acao.local.substring(0, 32) + '…' : acao.local}</span></div>)}
-                                  <div className="flex items-center gap-1 text-gray-700"><Building2 size={9} /><span className="text-[9px] truncate">{setorCriador?.nome?.length > 18 ? setorCriador.nome.substring(0, 18) + '…' : setorCriador?.nome || 'N/I'}</span>{acao.necessita_transporte && <Car size={14} className="text-blue-500 ml-auto" />}</div>
+                                <div key={acaoIdx} onClick={(e) => { e.stopPropagation(); setModalAcao(acaoOriginal) }} className={`rounded-md p-1.5 text-xs border-l-4 ${borderColor} bg-white shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-[1.02]`}>
+                                  <div className="flex items-center justify-between mb-1.5"><div className="flex flex-1 items-center justify-between gap-1 text-gray-400"><Clock size={10} className="text-gray-700" /><span className="text-xs font-mono font-medium text-gray-600">{acao.horario}</span>{acao.status === 'Pendente' && <span className="ml-auto text-amber-500 font-bold">Pendente</span>}{acao.status === 'Realizada' && <span className="ml-auto text-green-500 font-bold">Realizada</span>}{acao.status === 'Cancelada' && <span className="ml-auto text-red-500 font-bold">Cancelada</span>}</div></div>
+                                  <p className="text-xs font-semibold text-gray-800 mb-1 line-clamp-2 leading-tight">{nomeTipo.length > 30 ? nomeTipo.substring(0, 20) + '…' : nomeTipo}</p>
+                                  {acao.local && (<div className="flex items-center gap-1 mb-1 text-gray-700"><MapPin size={9} /><span className="text-xs truncate">{acao.local.length > 22 ? acao.local.substring(0, 32) + '…' : acao.local}</span></div>)}
+                                  <div className="flex items-center gap-1 text-gray-700"><Building2 size={9} /><span className="text-xs truncate">{setorCriador?.nome?.length > 18 ? setorCriador.nome.substring(0, 18) + '…' : setorCriador?.nome || 'N/I'}</span>{acao.necessita_transporte && <Car size={12} className="text-blue-500 ml-auto" />}</div>
                                 </div>
                               )
                             })
@@ -1027,8 +1204,8 @@ export default function DashboardPage() {
         </div>
         
         <div className="px-5 py-3 border-t border-gray-200 bg-gray-50 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-4 text-xs"><span className="text-gray-500 font-bold">Status:</span><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500"></div><span>Pendente</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-500"></div><span>Realizada</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div><span>Parcial</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500"></div><span>Cancelada</span></div></div>
-          <div className="flex items-center gap-3 text-xs text-gray-400"><div className="flex text-blue-500 items-center gap-1"><Car size={16} className="text-blue-500" /><span className='font-semibold'>Transporte</span></div></div>
+          <div className="flex items-center gap-4 text-sm"><span className="text-gray-500 font-bold">Status:</span><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500"></div><span>Pendente</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-500"></div><span>Realizada</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div><span>Parcial</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500"></div><span>Cancelada</span></div></div>
+          <div className="flex items-center gap-3 text-sm text-gray-400"><div className="flex text-blue-500 items-center gap-1"><Car size={16} className="text-blue-500" /><span className='font-semibold'>Transporte</span></div></div>
         </div>
       </div>
 
@@ -1084,24 +1261,43 @@ export default function DashboardPage() {
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-xs text-gray-400 uppercase">Tipo</label><p className="font-medium">{tiposAcoes.find(t => t.id === modalAcao.tipo_acao_id)?.nome || 'N/A'}</p></div>
-                <div><label className="text-xs text-gray-400 uppercase">Status</label><p className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${modalAcao.status === 'Realizada' ? 'bg-green-100 text-green-700' : modalAcao.status === 'Cancelada' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{modalAcao.status || 'Pendente'}</p></div>
-                <div><label className="text-xs text-gray-400 uppercase">Setor</label><p>{setores.find(s => s.id === modalAcao.setor_id)?.nome || 'N/I'}</p></div>
-                <div><label className="text-xs text-gray-400 uppercase">Data/Hora</label><p>{modalAcao.data_inicio ? new Date(modalAcao.data_inicio).toLocaleString('pt-BR') : 'N/A'}</p></div>
-                <div><label className="text-xs text-gray-400 uppercase">Local</label><p>{modalAcao.local || 'Não informado'}</p></div>
-                <div><label className="text-xs text-gray-400 uppercase">Transporte</label><p>{modalAcao.necessita_transporte ? 'Sim' : 'Não'}</p></div>
-                <div className="col-span-2"><label className="text-xs text-gray-400 uppercase">Participantes</label><p>{(modalAcao.pessoas || []).join(', ') || 'Nenhum'}</p></div>
-                <div className="col-span-2"><label className="text-xs text-gray-400 uppercase">Descrição</label><div className="mt-1 p-3 bg-gray-50 rounded-lg text-sm whitespace-pre-wrap">{modalAcao.descricao || 'Sem descrição'}</div></div>
-                <div className="col-span-2"><label className="text-xs text-gray-400 uppercase">Observações</label><div className="mt-1 p-3 bg-gray-50 rounded-lg text-sm whitespace-pre-wrap">{modalAcao.observacoes || 'Sem observações'}</div></div>
-                <div><label className="text-xs text-gray-400 uppercase">Criado por</label><p>{getUsuarioNome(modalAcao.created_by)}</p></div>
-                <div><label className="text-xs text-gray-400 uppercase">Criado em</label><p>{modalAcao.created_at ? new Date(modalAcao.created_at).toLocaleString('pt-BR') : 'N/A'}</p></div>
-                <div><label className="text-xs text-gray-400 uppercase">Atualizado por</label><p>{getUsuarioNome(modalAcao.updated_by)}</p></div>
-                <div><label className="text-xs text-gray-400 uppercase">Atualizado em</label><p>{modalAcao.updated_at ? new Date(modalAcao.updated_at).toLocaleString('pt-BR') : 'N/A'}</p></div>
+                <div><label className="text-sm text-gray-400 uppercase">Tipo</label><p className="font-medium">{tiposAcoes.find(t => t.id === modalAcao.tipo_acao_id)?.nome || 'N/A'}</p></div>
+                <div><label className="text-sm text-gray-400 uppercase">Status</label><p className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${modalAcao.status === 'Realizada' ? 'bg-green-100 text-green-700' : modalAcao.status === 'Cancelada' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{modalAcao.status || 'Pendente'}</p></div>
+                <div><label className="text-sm text-gray-400 uppercase">Setor</label><p>{setores.find(s => s.id === modalAcao.setor_id)?.nome || 'N/I'}</p></div>
+                <div><label className="text-sm text-gray-400 uppercase">Data/Hora</label><p>{modalAcao.data_inicio ? new Date(modalAcao.data_inicio).toLocaleString('pt-BR') : 'N/A'}</p></div>
+                <div><label className="text-sm text-gray-400 uppercase">Local</label><p>{modalAcao.local || 'Não informado'}</p></div>
+                <div><label className="text-sm text-gray-400 uppercase">Transporte</label><p>{modalAcao.necessita_transporte ? 'Sim' : 'Não'}</p></div>
+                <div className="col-span-2"><label className="text-sm text-gray-400 uppercase">Participantes</label><p>{(modalAcao.pessoas || []).join(', ') || 'Nenhum'}</p></div>
+                <div className="col-span-2"><label className="text-sm text-gray-400 uppercase">Descrição</label><div className="mt-1 p-3 bg-gray-50 rounded-lg text-sm whitespace-pre-wrap">{modalAcao.descricao || 'Sem descrição'}</div></div>
+                <div className="col-span-2"><label className="text-sm text-gray-400 uppercase">Observações</label><div className="mt-1 p-3 bg-gray-50 rounded-lg text-sm whitespace-pre-wrap">{modalAcao.observacoes || 'Sem observações'}</div></div>
+                <div><label className="text-sm text-gray-400 uppercase">Criado por</label><p>{getUsuarioNome(modalAcao.created_by)}</p></div>
+                <div><label className="text-sm text-gray-400 uppercase">Criado em</label><p>{modalAcao.created_at ? new Date(modalAcao.created_at).toLocaleString('pt-BR') : 'N/A'}</p></div>
+                <div><label className="text-sm text-gray-400 uppercase">Atualizado por</label><p>{getUsuarioNome(modalAcao.updated_by)}</p></div>
+                <div><label className="text-sm text-gray-400 uppercase">Atualizado em</label><p>{modalAcao.updated_at ? new Date(modalAcao.updated_at).toLocaleString('pt-BR') : 'N/A'}</p></div>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Modal de Criação de Ação via Agenda */}
+      <Modal isOpen={modalNovaAcao !== null} onClose={() => setModalNovaAcao(null)} title="Nova Ação" maxWidth="max-w-3xl">
+        <FormNovaAcao
+          setores={setores}
+          tiposAcoes={tiposAcoes}
+          locais={locais}
+          usuarios={usuarios}
+          userPerfilId={userPerfilId}
+          userSetoresIds={userSetoresIds}
+          defaultDataInicio={modalNovaAcao ? formatarDataParaPreenchimento(modalNovaAcao.dia, modalNovaAcao.turno) : undefined}
+          defaultSetorId={userSetoresIds.length === 1 ? userSetoresIds[0] : undefined}
+          onSave={() => {
+            setModalNovaAcao(null)
+            carregarDados()
+          }}
+          onCancel={() => setModalNovaAcao(null)}
+        />
+      </Modal>
 
       {acoesFiltradas.length === 0 && (
         <div className="bg-white rounded-xl p-12 text-center">

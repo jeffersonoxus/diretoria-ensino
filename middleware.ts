@@ -43,7 +43,7 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith('/auth/'))
 
   // Rotas protegidas
-  const protectedRoutes = ['/dien', '/admin']
+  const protectedRoutes = ['/agenda', '/admin']
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
 
   // Redirecionar para login se tentar acessar rota protegida sem estar logado
@@ -53,9 +53,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  // Redirecionar para /dien se estiver logado e tentar acessar login/cadastro
+  // Redirecionar para /agenda se estiver logado e tentar acessar login/cadastro
   if (user && (pathname === '/login' || pathname === '/cadastro')) {
-    return NextResponse.redirect(new URL('/dien', request.url))
+    return NextResponse.redirect(new URL('/agenda', request.url))
   }
 
   return response

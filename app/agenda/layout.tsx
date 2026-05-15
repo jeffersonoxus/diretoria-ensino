@@ -2,7 +2,7 @@ import { Sidebar } from '@/components/Sidebar'
 import { createClient } from '@/lib/supabase/middleware'
 import { redirect } from 'next/navigation'
 
-export default async function DashboardLayout({
+export default async function AgendaLayout({
   children,
 }: {
   children: React.ReactNode
@@ -25,7 +25,7 @@ export default async function DashboardLayout({
           {/* Header mobile com título da página */}
           <div className="md:hidden mb-6">
             <h1 className="text-2xl text-center font-bold text-gray-900">
-              Dashboard
+              Agenda
             </h1>
           </div>
           

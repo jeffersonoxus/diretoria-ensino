@@ -56,7 +56,7 @@ export default function CadastroPage() {
           router.push('/login?message=Conta criada com sucesso! Faça seu login.')
         } else {
           // Login automático bem sucedido, vai direto pro dashboard
-          router.push('/dien')
+          router.push('/agenda')
           router.refresh()
         }
       }
@@ -69,7 +69,7 @@ export default function CadastroPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50 flex flex-col justify-center px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen text-gray-700 bg-linear-to-br from-purple-50 via-white to-purple-50 flex flex-col justify-center px-4 py-12 sm:px-6 lg:px-8">
       {/* Logo */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center mb-8">
         <div className="flex justify-center mb-4">
