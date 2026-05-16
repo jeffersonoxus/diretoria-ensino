@@ -16,7 +16,8 @@ import {
   FileSpreadsheet,
   GraduationCap,
   ClipboardCheck,
-  Smartphone
+  Smartphone,
+  FileText
 } from 'lucide-react';
 import { useSetorEJA } from '@/hooks/useSetorEJA'
 
@@ -35,6 +36,7 @@ export const Sidebar = () => {
   const [perfil, setPerfil] = useState<{ id: string; nome: string } | null>(null)
   const [temSetor, setTemSetor] = useState(false)
   const [loadingSetor, setLoadingSetor] = useState(true)
+  const [documentosPendentes, setDocumentosPendentes] = useState(0)
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -64,6 +66,22 @@ export const Sidebar = () => {
     
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
+
+  // Contar documentos pendentes (admin)
+  useEffect(() => {
+    const isAdminEmail = user?.email === 'admin@exemplo.com' || user?.email === 'jeffersonoxus@gmail.com'
+    if (!isAdminEmail) return
+    const contarPendentes = async () => {
+      const { count } = await supabase
+        .from('documentos')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pendente')
+      setDocumentosPendentes(count || 0)
+    }
+    contarPendentes()
+    const interval = setInterval(contarPendentes, 30000)
+    return () => clearInterval(interval)
+  }, [supabase, user?.email])
 
   // Verificar se o usuário está em algum setor
   useEffect(() => {
@@ -119,6 +137,7 @@ export const Sidebar = () => {
         { href: '/agenda', icon: Home, label: 'Agenda', show: true },
         { href: '/agenda/perfil', icon: User, label: 'Meu Perfil', show: true },
         { href: '/agenda/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
+        { href: '/agenda/documentos', icon: FileText, label: 'Documentos', show: true, badge: documentosPendentes },
         { href: '/agenda/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
         { href: '/app', icon: Smartphone, label: 'App Mobile', show: temSetor, external: true },
       ]
@@ -136,6 +155,7 @@ export const Sidebar = () => {
       { href: '/agenda', icon: Home, label: 'Agenda', show: true },
       { href: '/agenda/perfil', icon: User, label: 'Meu Perfil', show: true },
       { href: '/agenda/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
+      { href: '/agenda/documentos', icon: FileText, label: 'Documentos', show: true },
       { href: '/agenda/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
       { href: '/app', icon: Smartphone, label: 'App Mobile', show: temSetor, external: true },
     ]
@@ -272,7 +292,7 @@ export const Sidebar = () => {
           {/* Menu de navegação */}
           <nav className="flex-1 overflow-y-auto p-4">
             <ul className="space-y-1">
-              {menuItems.filter(item => item.show).map((item) => {
+              {menuItems.filter(item => item.show).map((item: any) => {
                 const isActive = pathname === item.href || 
                   (item.href === '/app' && pathname?.startsWith('/app'))
                 return (
@@ -291,6 +311,11 @@ export const Sidebar = () => {
                     >
                       <item.icon className={`h-5 w-5 transition ${isActive ? 'text-[#7114dd]' : 'text-gray-400 group-hover:text-[#7114dd]'}`} />
                       <span className="text-sm font-medium">{item.label}</span>
+                      {item.badge > 0 && (
+                        <span className="ml-auto bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full font-bold">
+                          {item.badge}
+                        </span>
+                      )}
                       {item.external && (
                         <span className="ml-auto text-xs bg-[#ffa301] text-[#7114dd] px-2 py-0.5 rounded-full font-medium">
                           Mobile

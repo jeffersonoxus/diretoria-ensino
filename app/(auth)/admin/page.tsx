@@ -23,12 +23,16 @@ import {
   School,
   Edit,
   Eye,
-  EyeOff
+  EyeOff,
+  FileText,
+  LayoutGrid,
+  Building2,
+  FileType
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 // --- Interfaces ---
-type ModalType = 'setor' | 'tipo_acao' | 'local' | null
+type ModalType = 'setor' | 'tipo_acao' | 'local' | 'categoria_documento' | 'formato_documento' | null
 
 interface Perfil {
   id: string
@@ -70,6 +74,7 @@ interface TipoAcao {
 export default function AdminPage() {
   const supabase = createClient()
   const [activeModal, setActiveModal] = useState<ModalType>(null)
+  const [activeTab, setActiveTab] = useState<'setores' | 'locais' | 'modelos' | 'documentos'>('setores')
   const [setorParaEditar, setSetorParaEditar] = useState<Setor | null>(null)
   const [tipoAcaoParaEditar, setTipoAcaoParaEditar] = useState<TipoAcao | null>(null)
   const [localParaEditar, setLocalParaEditar] = useState<Local | null>(null)
@@ -77,6 +82,10 @@ export default function AdminPage() {
   const [setores, setSetores] = useState<Setor[]>([])
   const [tiposAcoes, setTiposAcoes] = useState<TipoAcao[]>([])
   const [locais, setLocais] = useState<Local[]>([])
+  const [categoriasDocumento, setCategoriasDocumento] = useState<Array<{ id: string; nome: string; setor_id: string | null }>>([])
+  const [formatosDocumento, setFormatosDocumento] = useState<Array<{ id: string; nome: string; extensao: string }>>([])
+  const [categoriaDocParaEditar, setCategoriaDocParaEditar] = useState<{ id: string; nome: string; setor_id: string | null } | null>(null)
+  const [formatoDocParaEditar, setFormatoDocParaEditar] = useState<{ id: string; nome: string; extensao: string } | null>(null)
   const [searchPerfil, setSearchPerfil] = useState('')
   const [searchLocal, setSearchLocal] = useState('')
   const [carregando, setCarregando] = useState(true)
@@ -88,11 +97,13 @@ export default function AdminPage() {
   const carregarDados = async () => {
     setCarregando(true)
     console.log("🔄 Carregando dados do admin...")
-    const [p, s, ta, l] = await Promise.all([
+    const [p, s, ta, l, cd, fd] = await Promise.all([
       supabase.from('perfis').select('*'),
       supabase.from('setores').select('*'),
       supabase.from('tipo_acao').select('*'),
-      supabase.from('locais').select('*').order('nome')
+      supabase.from('locais').select('*').order('nome'),
+      supabase.from('categorias_documento').select('*').order('nome'),
+      supabase.from('formatos_documento').select('*').order('nome'),
     ])
     if (p.data) {
       console.log(`📋 ${p.data.length} perfis carregados`)
@@ -107,6 +118,8 @@ export default function AdminPage() {
       console.log(`📋 ${l.data.length} locais carregados`)
       setLocais(l.data)
     }
+    if (cd.data) setCategoriasDocumento(cd.data)
+    if (fd.data) setFormatosDocumento(fd.data)
     setCarregando(false)
   }
 
@@ -120,6 +133,8 @@ export default function AdminPage() {
     setSetorParaEditar(null)
     setTipoAcaoParaEditar(null)
     setLocalParaEditar(null)
+    setCategoriaDocParaEditar(null)
+    setFormatoDocParaEditar(null)
   }
 
   const handleDeleteSetor = async (id: string) => {
@@ -184,206 +199,258 @@ export default function AdminPage() {
     )
   }
 
+  const tabs = [
+    { id: 'setores' as const, label: 'Setores', icon: FolderTree, color: '#7114dd', count: setores.length },
+    { id: 'locais' as const, label: 'Locais', icon: Building2, color: '#16a34a', count: locais.length },
+    { id: 'modelos' as const, label: 'Modelos de Ação', icon: Workflow, color: '#7114dd', count: tiposAcoes.length },
+    { id: 'documentos' as const, label: 'Documentos', icon: FileType, color: '#2563eb', count: categoriasDocumento.length + formatosDocumento.length },
+  ]
+
   return (
     <div className="min-h-screen p-4 md:p-8 bg-gradient-to-br from-purple-100 to-purple-200 text-slate-800 font-sans">
-      <header className="mb-8">
+      <header className="mb-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Painel Admin</h1>
-            <p className="text-slate-500 font-medium">Gestão de Setores, Modelos de Ação e Locais</p>
+            <p className="text-slate-500 font-medium">Gestão completa do sistema DIEN</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2">
             <button 
               onClick={handleLogout}
               className="bg-white text-red-600 border border-red-200 px-4 py-2 rounded-xl hover:bg-red-50 transition shadow-sm flex items-center gap-2 font-bold text-sm"
             >
               <LogOut size={18}/> Sair
             </button>
-            <button 
-              onClick={() => setActiveModal('setor')} 
-              className="bg-white text-[#7114dd] border border-[#7114dd]/20 px-4 py-2 rounded-xl hover:bg-[#7114dd]/5 transition shadow-sm flex items-center gap-2 font-bold text-sm"
-            >
-              <Plus size={18}/> Novo Setor
-            </button>
-            <button 
-              onClick={() => setActiveModal('local')} 
-              className="bg-white text-green-600 border border-green-200 px-4 py-2 rounded-xl hover:bg-green-50 transition shadow-sm flex items-center gap-2 font-bold text-sm"
-            >
-              <School size={18}/> Novo Local
-            </button>
-            <button 
-              onClick={() => setActiveModal('tipo_acao')} 
-              className="bg-[#7114dd] text-white px-4 py-2 rounded-xl hover:bg-[#a94dff] transition shadow-md flex items-center gap-2 font-bold text-sm"
-            >
-              <Plus size={18}/> Novo Modelo
-            </button>
+            {activeTab === 'setores' && (
+              <button onClick={() => setActiveModal('setor')} className="bg-white text-[#7114dd] border border-[#7114dd]/20 px-4 py-2 rounded-xl hover:bg-[#7114dd]/5 transition shadow-sm flex items-center gap-2 font-bold text-sm">
+                <Plus size={18}/> Novo Setor
+              </button>
+            )}
+            {activeTab === 'locais' && (
+              <button onClick={() => setActiveModal('local')} className="bg-white text-green-600 border border-green-200 px-4 py-2 rounded-xl hover:bg-green-50 transition shadow-sm flex items-center gap-2 font-bold text-sm">
+                <Plus size={18}/> Novo Local
+              </button>
+            )}
+            {activeTab === 'modelos' && (
+              <button onClick={() => setActiveModal('tipo_acao')} className="bg-[#7114dd] text-white px-4 py-2 rounded-xl hover:bg-[#a94dff] transition shadow-md flex items-center gap-2 font-bold text-sm">
+                <Plus size={18}/> Novo Modelo
+              </button>
+            )}
+            {activeTab === 'documentos' && (
+              <button onClick={() => setActiveModal('categoria_documento')} className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition shadow-sm flex items-center gap-2 font-bold text-sm">
+                <Plus size={18}/> Nova Categoria
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        {/* Setores */}
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
+              activeTab === tab.id
+                ? 'bg-white shadow-md text-slate-900 ring-2 ring-slate-200'
+                : 'bg-white/60 text-slate-500 hover:bg-white hover:shadow-sm'
+            }`}
+          >
+            <tab.icon size={16} style={{ color: tab.color }} />
+            <span>{tab.label}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+              activeTab === tab.id ? 'bg-slate-100 text-slate-600' : 'bg-slate-200/60 text-slate-500'
+            }`}>{tab.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Conteúdo das abas */}
+      {activeTab === 'setores' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {setores.length === 0 ? (
+            <div className="col-span-full text-center py-16 bg-white rounded-2xl border">
+              <FolderTree size={48} className="mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-500 font-medium">Nenhum setor cadastrado</p>
+              <button onClick={() => setActiveModal('setor')} className="mt-3 text-sm text-[#7114dd] hover:underline">Criar primeiro setor</button>
+            </div>
+          ) : setores.map((setor) => (
+            <div key={setor.id} className="border bg-white p-4 rounded-2xl shadow-sm relative group hover:shadow-md transition">
+              <div className="flex justify-between items-start mb-3">
+                <div className="w-10 h-10 bg-[#7114dd]/10 rounded-xl flex items-center justify-center">
+                  <FolderTree className="text-[#7114dd]" size={20} />
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                  <button onClick={() => { setSetorParaEditar(setor); setActiveModal('setor'); }} className="text-[#7114dd] hover:bg-[#7114dd]/10 p-1.5 rounded-lg"><Pencil size={14} /></button>
+                  <button onClick={() => handleDeleteSetor(setor.id)} className="text-red-600 hover:bg-red-50 p-1.5 rounded-lg"><Trash2 size={14} /></button>
+                </div>
+              </div>
+              <h3 className="font-black text-slate-900 mb-1">{setor.nome}</h3>
+              <p className="text-xs text-slate-500 mb-3 line-clamp-1">{setor.descricao || 'Sem descrição'}</p>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase mb-2">
+                <Users size={12}/> {setor.pessoas?.length || 0} Membros
+              </div>
+              {setor.pessoas && setor.pessoas.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {setor.pessoas.slice(0, 3).map(pessoaId => {
+                    const perfil = perfis.find(p => p.id === pessoaId)
+                    return perfil ? (
+                      <span key={pessoaId} className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded-full" title={perfil.email}>{perfil.nome.split(' ')[0]}</span>
+                    ) : (
+                      <span key={pessoaId} className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">ID: {pessoaId.slice(0, 6)}</span>
+                    )
+                  })}
+                  {setor.pessoas.length > 3 && <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded-full">+{setor.pessoas.length - 3}</span>}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'locais' && (
         <div className="space-y-4">
-          <h2 className="text-xl font-bold flex items-center gap-2 px-1">
-            <FolderTree className="text-[#7114dd]" size={20} /> Setores Cadastrados
-          </h2>
-          <div className="grid grid-cols-1 gap-4">
-            {setores.map((setor) => (
-              <div key={setor.id} className="border bg-white p-4 rounded-2xl shadow-sm relative group">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-black text-slate-900">{setor.nome}</h3>
+          <div className="relative max-w-md">
+            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input type="text" placeholder="Buscar local por nome ou endereço..." value={searchLocal} onChange={(e) => setSearchLocal(e.target.value)} className="w-full pl-9 pr-4 py-2.5 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {locaisFiltrados.length === 0 ? (
+              <div className="col-span-full text-center py-16 bg-white rounded-2xl border">
+                <Building2 size={48} className="mx-auto text-gray-300 mb-3" />
+                <p className="text-gray-500 font-medium">Nenhum local encontrado</p>
+              </div>
+            ) : locaisFiltrados.map((local) => (
+              <div key={local.id} className={`border bg-white p-4 rounded-2xl shadow-sm relative group hover:shadow-md transition ${!local.ativo ? 'opacity-60 bg-gray-50' : ''}`}>
+                <div className="flex justify-between items-start mb-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                    <School className="text-green-600" size={20} />
+                  </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
-                    <button 
-                      onClick={() => { setSetorParaEditar(setor); setActiveModal('setor'); }} 
-                      className="text-[#7114dd] hover:bg-[#7114dd]/10 p-1.5 rounded-lg transition"
-                    >
-                      <Pencil size={14} />
+                    <button onClick={() => handleToggleLocalStatus(local)} className={`p-1.5 rounded-lg ${local.ativo ? 'text-amber-600 hover:bg-amber-50' : 'text-green-600 hover:bg-green-50'}`} title={local.ativo ? 'Desativar' : 'Ativar'}>
+                      {local.ativo ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
-                    <button 
-                      onClick={() => handleDeleteSetor(setor.id)} 
-                      className="text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <button onClick={() => { setLocalParaEditar(local); setActiveModal('local'); }} className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg"><Pencil size={14} /></button>
+                    <button onClick={() => handleDeleteLocal(local.id)} className="text-red-600 hover:bg-red-50 p-1.5 rounded-lg"><Trash2 size={14} /></button>
                   </div>
                 </div>
-                <p className="text-xs text-slate-500 mb-4 line-clamp-1">{setor.descricao || 'Sem descrição'}</p>
-                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
-                  <Users size={12}/> {setor.pessoas?.length || 0} Membros
-                </div>
-                {setor.pessoas && setor.pessoas.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {setor.pessoas.slice(0, 3).map(pessoaId => {
-                      const perfil = perfis.find(p => p.id === pessoaId)
-                      return perfil ? (
-                        <span key={pessoaId} className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded-full" title={perfil.email}>
-                          {perfil.nome.split(' ')[0]}
-                        </span>
-                      ) : (
-                        <span key={pessoaId} className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full" title="Usuário não encontrado">
-                          ID: {pessoaId.slice(0, 6)}
-                        </span>
-                      )
-                    })}
-                    {setor.pessoas.length > 3 && (
-                      <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded-full">
-                        +{setor.pessoas.length - 3}
-                      </span>
-                    )}
-                  </div>
-                )}
+                <h3 className="font-black text-slate-900 flex items-center gap-2 mb-1">{local.nome}{!local.ativo && <span className="text-[9px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Inativo</span>}</h3>
+                {local.endereco && <p className="text-xs text-slate-500 mb-2">{local.endereco}</p>}
+                <span className={`text-[9px] px-2 py-0.5 rounded-full ${local.tipo === 'escola' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                  {local.tipo === 'escola' ? 'Escola' : 'Outro'}
+                </span>
               </div>
             ))}
           </div>
         </div>
+      )}
 
-        {/* Locais */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold flex items-center gap-2 px-1">
-            <School className="text-green-600" size={20} /> Locais Cadastrados
-          </h2>
-          
-          <div className="relative mb-3">
-            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar local por nome ou endereço..."
-              value={searchLocal}
-              onChange={(e) => setSearchLocal(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-          </div>
+      {activeTab === 'modelos' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {tiposAcoes.length === 0 ? (
+            <div className="col-span-full text-center py-16 bg-white rounded-2xl border">
+              <Workflow size={48} className="mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-500 font-medium">Nenhum modelo de ação cadastrado</p>
+              <button onClick={() => setActiveModal('tipo_acao')} className="mt-3 text-sm text-[#7114dd] hover:underline">Criar primeiro modelo</button>
+            </div>
+          ) : tiposAcoes.map((ta) => (
+            <div key={ta.id} className="border bg-white p-4 rounded-2xl shadow-sm relative group hover:shadow-md transition">
+              <div className="flex justify-between items-start mb-3">
+                <div className="w-10 h-10 bg-[#7114dd]/10 rounded-xl flex items-center justify-center">
+                  <Blocks className="text-[#7114dd]" size={20} />
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                  <button onClick={() => { setTipoAcaoParaEditar(ta); setActiveModal('tipo_acao'); }} className="bg-white shadow-sm p-1.5 rounded-lg hover:bg-[#7114dd]/10"><Pencil size={12} /></button>
+                  <button onClick={() => handleDeleteTipoAcao(ta.id)} className="bg-white shadow-sm p-1.5 rounded-lg hover:bg-red-50"><Trash2 size={12} /></button>
+                </div>
+              </div>
+              <h3 className="font-black text-slate-900 mb-1">{ta.nome}</h3>
+              <p className="text-[10px] text-[#7114dd] font-bold uppercase mb-3">
+                {ta.setores_ids.length === setores.length ? 'Todos os Setores' : `${ta.setores_ids.length} Setores`}
+              </p>
+              <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                <span className="bg-[#ffa301]/20 text-[#7114dd] px-2 py-1 rounded-md font-bold">{ta.parametros_extras.length} campos personalizados</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
-          <div className="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto">
-            {locaisFiltrados.length === 0 ? (
-              <div className="text-center py-8 bg-white rounded-2xl border">
-                <School size={32} className="mx-auto text-gray-300 mb-2" />
-                <p className="text-gray-400 text-sm">Nenhum local encontrado</p>
+      {activeTab === 'documentos' && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <FileText className="text-blue-600" size={18} /> Categorias
+                <span className="text-xs font-normal text-gray-400">({categoriasDocumento.length})</span>
+              </h3>
+              <button onClick={() => setActiveModal('categoria_documento')} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition flex items-center gap-1">
+                <Plus size={14} /> Nova
+              </button>
+            </div>
+            {categoriasDocumento.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-2xl border">
+                <FileText size={32} className="mx-auto text-gray-300 mb-2" />
+                <p className="text-gray-400 text-sm">Nenhuma categoria</p>
               </div>
             ) : (
-              locaisFiltrados.map((local) => (
-                <div key={local.id} className={`border bg-white p-4 rounded-2xl shadow-sm relative group ${!local.ativo ? 'opacity-60 bg-gray-50' : ''}`}>
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex-1">
-                      <h3 className="font-black text-slate-900 flex items-center gap-2">
-                        {local.nome}
-                        {!local.ativo && (
-                          <span className="text-[9px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Inativo</span>
-                        )}
-                      </h3>
-                      {local.endereco && (
-                        <p className="text-xs text-slate-500 mt-1">{local.endereco}</p>
-                      )}
+              <div className="space-y-2">
+                {categoriasDocumento.map((cat) => (
+                  <div key={cat.id} className="bg-white border p-3 rounded-xl flex items-center justify-between group hover:shadow-sm transition">
+                    <div>
+                      <p className="font-medium text-gray-800 text-sm">{cat.nome}</p>
+                      {cat.setor_id && <p className="text-[10px] text-gray-400">Setor: {setores.find(s => s.id === cat.setor_id)?.nome || 'N/A'}</p>}
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
-                      <button 
-                        onClick={() => handleToggleLocalStatus(local)} 
-                        className={`p-1.5 rounded-lg transition ${local.ativo ? 'text-amber-600 hover:bg-amber-50' : 'text-green-600 hover:bg-green-50'}`}
-                        title={local.ativo ? 'Desativar' : 'Ativar'}
-                      >
-                        {local.ativo ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
-                      <button 
-                        onClick={() => { setLocalParaEditar(local); setActiveModal('local'); }} 
-                        className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteLocal(local.id)} 
-                        className="text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <button onClick={() => { setCategoriaDocParaEditar(cat); setActiveModal('categoria_documento'); }} className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg"><Pencil size={12} /></button>
+                      <button onClick={async () => { if (!confirm('Excluir?')) return; const { error } = await supabase.from('categorias_documento').delete().eq('id', cat.id); if (!error) carregarDados() }} className="text-red-600 hover:bg-red-50 p-1.5 rounded-lg"><Trash2 size={12} /></button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className={`text-[9px] px-2 py-0.5 rounded-full ${local.tipo === 'escola' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
-                      {local.tipo === 'escola' ? '🏫 Escola' : '📍 Outro'}
-                    </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <FileType className="text-blue-600" size={18} /> Formatos
+                <span className="text-xs font-normal text-gray-400">({formatosDocumento.length})</span>
+              </h3>
+              <button onClick={() => setActiveModal('formato_documento')} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition flex items-center gap-1">
+                <Plus size={14} /> Novo
+              </button>
+            </div>
+            {formatosDocumento.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-2xl border">
+                <FileType size={32} className="mx-auto text-gray-300 mb-2" />
+                <p className="text-gray-400 text-sm">Nenhum formato</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {formatosDocumento.map((fmt) => (
+                  <div key={fmt.id} className="bg-white border p-3 rounded-xl flex items-center justify-between group hover:shadow-sm transition">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+                        <FileText className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800 text-sm">{fmt.nome}</p>
+                        <p className="text-[10px] text-gray-400 font-mono">{fmt.extensao}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                      <button onClick={() => { setFormatoDocParaEditar(fmt); setActiveModal('formato_documento'); }} className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg"><Pencil size={12} /></button>
+                      <button onClick={async () => { if (!confirm('Excluir?')) return; const { error } = await supabase.from('formatos_documento').delete().eq('id', fmt.id); if (!error) carregarDados() }} className="text-red-600 hover:bg-red-50 p-1.5 rounded-lg"><Trash2 size={12} /></button>
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         </div>
-
-        {/* Modelos de Ação */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold flex items-center gap-2 px-1">
-            <Workflow className="text-[#7114dd]" size={20} /> Modelos de Ações
-          </h2>
-          <div className="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto">
-            {tiposAcoes.map((ta) => (
-              <div key={ta.id} className="border bg-white p-4 rounded-2xl shadow-sm relative group overflow-hidden">
-                <div className="absolute top-0 right-0 p-2 flex gap-1 opacity-0 group-hover:opacity-100 transition z-10">
-                  <button 
-                    onClick={() => { setTipoAcaoParaEditar(ta); setActiveModal('tipo_acao'); }} 
-                    className="bg-white shadow-md p-1.5 rounded-lg hover:bg-[#7114dd]/10"
-                  >
-                    <Pencil size={12} />
-                  </button>
-                  <button 
-                    onClick={() => handleDeleteTipoAcao(ta.id)} 
-                    className="bg-white shadow-md p-1.5 rounded-lg hover:bg-red-50"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-                <h3 className="font-black text-slate-900 mb-1 pr-16">{ta.nome}</h3>
-                <p className="text-[10px] text-[#7114dd] font-bold uppercase mb-3">
-                  {ta.setores_ids.length === setores.length ? 'Todos os Setores' : `${ta.setores_ids.length} Setores`}
-                </p>
-                <div className="flex flex-wrap gap-2 mt-auto">
-                   <span className="text-[9px] bg-[#ffa301]/20 text-[#7114dd] px-2 py-1 rounded-md font-bold border border-[#ffa301]/30">
-                     +{ta.parametros_extras.length} Custom
-                   </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Modal de Setor */}
       {activeModal === 'setor' && (
@@ -431,7 +498,140 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de Categoria de Documento */}
+      {activeModal === 'categoria_documento' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={closeModal} />
+          <div className="relative bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+            <div className="p-6 md:p-10">
+              <FormCategoriaDocumento
+                setores={setores}
+                dadosIniciais={categoriaDocParaEditar}
+                onSuccess={() => { closeModal(); carregarDados(); }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Formato de Documento */}
+      {activeModal === 'formato_documento' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={closeModal} />
+          <div className="relative bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+            <div className="p-6 md:p-10">
+              <FormFormatoDocumento
+                dadosIniciais={formatoDocParaEditar}
+                onSuccess={() => { closeModal(); carregarDados(); }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+// --- Componente FormCategoriaDocumento ---
+function FormCategoriaDocumento({ setores, dadosIniciais, onSuccess }: { setores: Setor[], dadosIniciais?: { id: string; nome: string; setor_id: string | null } | null, onSuccess: () => void }) {
+  const supabase = createClient()
+  const [loading, setLoading] = useState(false)
+  const [nome, setNome] = useState(dadosIniciais?.nome || '')
+  const [setorId, setSetorId] = useState(dadosIniciais?.setor_id || '')
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!nome.trim()) { alert('Nome é obrigatório'); return }
+    setLoading(true)
+    const payload = { nome: nome.trim(), setor_id: setorId || null }
+    let error
+    if (dadosIniciais?.id) {
+      const r = await supabase.from('categorias_documento').update(payload).eq('id', dadosIniciais.id)
+      error = r.error
+    } else {
+      const r = await supabase.from('categorias_documento').insert([payload])
+      error = r.error
+    }
+    if (error) alert('Erro: ' + error.message)
+    else onSuccess()
+    setLoading(false)
+  }
+
+  return (
+    <form onSubmit={handleSave} className="space-y-6">
+      <div className="flex items-center gap-4 border-b pb-6">
+        <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg"><FileText /></div>
+        <div className="flex-1">
+          <h2 className="text-2xl font-black">{dadosIniciais ? 'Editar Categoria' : 'Nova Categoria'}</h2>
+          <p className="text-slate-500 text-sm font-medium">Classificação para documentos</p>
+        </div>
+        <button type="button" onClick={onSuccess} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
+      </div>
+      <div className="space-y-2">
+        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome da Categoria *</label>
+        <input className="w-full border p-4 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 ring-blue-500 transition" placeholder="Ex: Ofício, Parecer, Plano de Aula" value={nome} onChange={e => setNome(e.target.value)} required />
+      </div>
+      <div className="space-y-2">
+        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Setor (opcional)</label>
+        <select value={setorId} onChange={e => setSetorId(e.target.value)} className="w-full border p-4 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 ring-blue-500 transition">
+          <option value="">Global (todos os setores)</option>
+          {setores.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+        </select>
+      </div>
+      <button disabled={loading} className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold disabled:opacity-50 hover:shadow-lg transition-all">{loading ? 'Salvando...' : dadosIniciais ? 'Atualizar' : 'Salvar'}</button>
+    </form>
+  )
+}
+
+// --- Componente FormFormatoDocumento ---
+function FormFormatoDocumento({ dadosIniciais, onSuccess }: { dadosIniciais?: { id: string; nome: string; extensao: string } | null, onSuccess: () => void }) {
+  const supabase = createClient()
+  const [loading, setLoading] = useState(false)
+  const [nome, setNome] = useState(dadosIniciais?.nome || '')
+  const [extensao, setExtensao] = useState(dadosIniciais?.extensao || '')
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!nome.trim() || !extensao.trim()) { alert('Preencha todos os campos'); return }
+    const ext = extensao.startsWith('.') ? extensao.trim() : `.${extensao.trim()}`
+    setLoading(true)
+    const payload = { nome: nome.trim(), extensao: ext }
+    let error
+    if (dadosIniciais?.id) {
+      const r = await supabase.from('formatos_documento').update(payload).eq('id', dadosIniciais.id)
+      error = r.error
+    } else {
+      const r = await supabase.from('formatos_documento').insert([payload])
+      error = r.error
+    }
+    if (error) alert('Erro: ' + error.message)
+    else onSuccess()
+    setLoading(false)
+  }
+
+  return (
+    <form onSubmit={handleSave} className="space-y-6">
+      <div className="flex items-center gap-4 border-b pb-6">
+        <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg"><FileText /></div>
+        <div className="flex-1">
+          <h2 className="text-2xl font-black">{dadosIniciais ? 'Editar Formato' : 'Novo Formato'}</h2>
+          <p className="text-slate-500 text-sm font-medium">Formato de arquivo permitido</p>
+        </div>
+        <button type="button" onClick={onSuccess} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome *</label>
+          <input className="w-full border p-4 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 ring-blue-500 transition" placeholder="Ex: PDF" value={nome} onChange={e => setNome(e.target.value)} required />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-400 uppercase ml-1">Extensão *</label>
+          <input className="w-full border p-4 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 ring-blue-500 transition" placeholder="Ex: .pdf" value={extensao} onChange={e => setExtensao(e.target.value)} required />
+        </div>
+      </div>
+      <button disabled={loading} className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold disabled:opacity-50 hover:shadow-lg transition-all">{loading ? 'Salvando...' : dadosIniciais ? 'Atualizar' : 'Salvar'}</button>
+    </form>
   )
 }
 

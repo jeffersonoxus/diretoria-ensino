@@ -2,6 +2,8 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -38,9 +40,24 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
+  // Rate limiting simples (por IP)
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  const now = Date.now()
+  const windowMs = 60 * 1000
+  const maxRequests = 60
+  const record = rateLimitMap.get(ip)
+  if (record && record.resetAt > now) {
+    record.count++
+    if (record.count > maxRequests) {
+      return new NextResponse('Muitas requisições. Tente novamente em 1 minuto.', { status: 429 })
+    }
+  } else {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs })
+  }
+
   // Rotas públicas (acessíveis sem login)
-  const publicRoutes = ['/', '/login', '/cadastro', '/auth/callback']
-  const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith('/auth/'))
+  const publicRoutes = ['/', '/login', '/cadastro', '/auth/callback', '/compartilhar']
+  const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route))
 
   // Rotas protegidas
   const protectedRoutes = ['/agenda', '/admin']
