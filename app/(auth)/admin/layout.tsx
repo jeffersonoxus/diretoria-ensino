@@ -1,6 +1,6 @@
 // app/(auth)/admin/layout.tsx
 import { Sidebar } from '@/components/Sidebar'
-import { createClient } from '@/lib/supabase/middleware'
+import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
 export default async function AdminLayout({
@@ -15,11 +15,18 @@ export default async function AdminLayout({
     redirect('/login')
   }
 
-  // Verificar se é admin
-  const isAdmin = user.email === 'admin@exemplo.com' || user.email === 'jeffersonoxus@gmail.com'
+  // Verificar nível de acesso - diretivo ou administrativo podem acessar admin
+  const { data: perfil } = await supabase
+    .from('perfis')
+    .select('nivel_acesso')
+    .eq('email', user.email)
+    .single()
+
+  const nivelAcesso = perfil?.nivel_acesso
+  const podeAcessarAdmin = nivelAcesso === 'diretivo' || nivelAcesso === 'administrativo'
   
-  if (!isAdmin) {
-    redirect('/agenda') // Redireciona usuários não-admin
+  if (!podeAcessarAdmin) {
+    redirect('/agenda')
   }
 
   return (

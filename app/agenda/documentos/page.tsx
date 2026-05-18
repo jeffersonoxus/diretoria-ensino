@@ -21,6 +21,7 @@ export default function DocumentosPage() {
   const [userEmail, setUserEmail] = useState('')
   const [userPerfilId, setUserPerfilId] = useState<string | null>(null)
   const [userSetoresIds, setUserSetoresIds] = useState<string[]>([])
+  const [userNivelAcesso, setUserNivelAcesso] = useState<string>('tecnico')
   const [loading, setLoading] = useState(true)
   const [showUpload, setShowUpload] = useState(false)
   const [docVisualizar, setDocVisualizar] = useState<any>(null)
@@ -31,11 +32,17 @@ export default function DocumentosPage() {
   const [filtroSetor, setFiltroSetor] = useState('')
   const [filtroStatus, setFiltroStatus] = useState('')
 
-  const isAdmin = userEmail === 'admin@exemplo.com' || userEmail === 'jeffersonoxus@gmail.com'
+  const isAdmin = userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo'
 
   useEffect(() => {
     carregarDados()
   }, [])
+
+  useEffect(() => {
+    if (!loading && userSetoresIds.length === 0 && !isAdmin) {
+      router.push('/agenda/perfil')
+    }
+  }, [loading, userSetoresIds, isAdmin])
 
   const carregarDados = async () => {
     setLoading(true)
@@ -45,22 +52,19 @@ export default function DocumentosPage() {
 
     const { data: perfil } = await supabase
       .from('perfis')
-      .select('id, nome')
+      .select('id, nome, nivel_acesso')
       .eq('email', user.email)
       .single()
 
     if (perfil) {
       setUserPerfilId(perfil.id)
+      setUserNivelAcesso(perfil.nivel_acesso || 'tecnico')
       const { data: setoresData } = await supabase.from('setores').select('*')
       const setoresDoUsuario = setoresData?.filter((s: any) =>
         s.pessoas?.includes(perfil.id)
       ) || []
       setUserSetoresIds(setoresDoUsuario.map((s: any) => s.id))
     }
-
-    const adminFilter = isAdmin
-      ? {}
-      : perfil ? { setor_id: (await supabase.from('setores').select('id').contains('pessoas', [perfil.id])).data?.map((s: any) => s.id) || [] } : {}
 
     const [docsRes, catsRes, formatsRes, setoresRes, perfisRes] = await Promise.all([
       supabase.from('documentos').select('*').order('created_at', { ascending: false }),

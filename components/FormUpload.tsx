@@ -223,7 +223,7 @@ export default function FormUpload({ categorias, formatos, setores, setorId, use
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="Título do Documento *" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex: Ofício Circular nº 001/2026" required />
+        <Input label="Título do Documento" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex: Ofício Circular nº 001/2026" required />
         <Input label="Tags (separadas por vírgula)" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="Ex: ofício, 2026, educação infantil" />
       </div>
 
@@ -231,7 +231,7 @@ export default function FormUpload({ categorias, formatos, setores, setorId, use
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="w-full mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Setor *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Setor</label>
           <select value={setorSelecionado} onChange={(e) => setSetorSelecionado(e.target.value)} className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
             <option value="">Selecione...</option>
             {setoresFiltrados.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}

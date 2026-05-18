@@ -38,6 +38,7 @@ interface Perfil {
   id: string
   nome: string
   email: string
+  nivel_acesso?: string
 }
 
 interface Setor {
@@ -74,7 +75,7 @@ interface TipoAcao {
 export default function AdminPage() {
   const supabase = createClient()
   const [activeModal, setActiveModal] = useState<ModalType>(null)
-  const [activeTab, setActiveTab] = useState<'setores' | 'locais' | 'modelos' | 'documentos'>('setores')
+  const [activeTab, setActiveTab] = useState<'setores' | 'locais' | 'modelos' | 'documentos' | 'usuarios'>('setores')
   const [setorParaEditar, setSetorParaEditar] = useState<Setor | null>(null)
   const [tipoAcaoParaEditar, setTipoAcaoParaEditar] = useState<TipoAcao | null>(null)
   const [localParaEditar, setLocalParaEditar] = useState<Local | null>(null)
@@ -88,6 +89,8 @@ export default function AdminPage() {
   const [formatoDocParaEditar, setFormatoDocParaEditar] = useState<{ id: string; nome: string; extensao: string } | null>(null)
   const [searchPerfil, setSearchPerfil] = useState('')
   const [searchLocal, setSearchLocal] = useState('')
+  const [searchAdminPerfil, setSearchAdminPerfil] = useState('')
+  const [userNivelAcesso, setUserNivelAcesso] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
@@ -120,6 +123,17 @@ export default function AdminPage() {
     }
     if (cd.data) setCategoriasDocumento(cd.data)
     if (fd.data) setFormatosDocumento(fd.data)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user?.email) {
+      const { data: perfilAdmin } = await supabase
+        .from('perfis')
+        .select('nivel_acesso')
+        .eq('email', user.email)
+        .single()
+      setUserNivelAcesso(perfilAdmin?.nivel_acesso || null)
+    }
+
     setCarregando(false)
   }
 
@@ -137,13 +151,87 @@ export default function AdminPage() {
     setFormatoDocParaEditar(null)
   }
 
+  const isSuperAdmin = userNivelAcesso === 'administrativo'
+
+  const handleUpdateNivelAcesso = async (perfilId: string, novoNivel: string) => {
+    if (!isSuperAdmin) return
+    const { error } = await supabase
+      .from('perfis')
+      .update({ nivel_acesso: novoNivel })
+      .eq('id', perfilId)
+    if (!error) {
+      setPerfis(prev => prev.map(p => p.id === perfilId ? { ...p, nivel_acesso: novoNivel } : p))
+    } else {
+      alert('Erro ao atualizar nível de acesso: ' + error.message)
+    }
+  }
+
+  const handleToggleSetorPessoa = async (setorId: string, pessoaId: string, currentPessoas: string[]) => {
+    if (!isSuperAdmin) return
+    const isInSetor = currentPessoas.includes(pessoaId)
+    const novasPessoas = isInSetor
+      ? currentPessoas.filter(id => id !== pessoaId)
+      : [...currentPessoas, pessoaId]
+
+    const { error } = await supabase
+      .from('setores')
+      .update({ pessoas: novasPessoas })
+      .eq('id', setorId)
+
+    if (!error) {
+      setSetores(prev => prev.map(s => s.id === setorId ? { ...s, pessoas: novasPessoas } : s))
+    } else {
+      alert('Erro ao alterar setor: ' + error.message)
+    }
+  }
+
   const handleDeleteSetor = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este setor? Esta ação pode afetar ações existentes.')) return
+    const setorNome = setores.find(s => s.id === id)?.nome || ''
+
+    const { count: docRejeitados } = await supabase
+      .from('documentos').select('*', { count: 'exact', head: true }).eq('setor_id', id).eq('status', 'rejeitado')
+    const { count: docAtivos } = await supabase
+      .from('documentos').select('*', { count: 'exact', head: true }).eq('setor_id', id).neq('status', 'rejeitado')
+
+    let msg = `Excluir setor "${setorNome || id}"?\n`
+    if (docRejeitados && docRejeitados > 0) msg += `\n🗑️ ${docRejeitados} documento(s) rejeitado(s) serão excluídos permanentemente.`
+    if (docAtivos && docAtivos > 0) msg += `\n📄 ${docAtivos} documento(s) ativo(s) ficarão sem setor vinculado (setor_id → NULL).`
+
+    if (!confirm(msg)) return
+
+    if (docRejeitados && docRejeitados > 0) {
+      const { data: docsPraRemover } = await supabase
+        .from('documentos').select('id, arquivo_url').eq('setor_id', id).eq('status', 'rejeitado')
+      for (const doc of docsPraRemover || []) {
+        if (doc.arquivo_url) {
+          const path = doc.arquivo_url.split('/').slice(-2).join('/')
+          await supabase.storage.from('documentos').remove([path])
+        }
+      }
+      await supabase.from('documentos').delete().eq('setor_id', id).eq('status', 'rejeitado')
+    }
+
+    await supabase.from('limites_setor').delete().eq('setor_id', id)
+    await supabase.from('upload_tickets').delete().eq('setor_id', id)
+
     const { error } = await supabase.from('setores').delete().eq('id', id)
     if (!error) {
       carregarDados()
     } else {
-      alert('Erro ao excluir setor: ' + error.message)
+      const restantes = docAtivos || 0
+      if (restantes > 0) {
+        alert(
+          `Ainda existem ${restantes} documento(s) ativos vinculados a este setor.\n\n` +
+          `Para excluir o setor sem perder os documentos:\n` +
+          `1. Execute no SQL Editor do Supabase:\n` +
+          `   ALTER TABLE documentos ALTER COLUMN setor_id DROP NOT NULL;\n` +
+          `   ALTER TABLE documentos ADD CONSTRAINT documentos_setor_id_fkey\n` +
+          `     FOREIGN KEY (setor_id) REFERENCES setores(id) ON DELETE SET NULL;\n\n` +
+          `2. Ou remova os documentos ativos manualmente antes de excluir.`
+        )
+      } else {
+        alert('Erro ao excluir setor: ' + error.message)
+      }
     }
   }
 
@@ -193,7 +281,7 @@ export default function AdminPage() {
 
   if (carregando) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-100 to-purple-200">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7114dd]"></div>
       </div>
     )
@@ -201,13 +289,14 @@ export default function AdminPage() {
 
   const tabs = [
     { id: 'setores' as const, label: 'Setores', icon: FolderTree, color: '#7114dd', count: setores.length },
+    { id: 'usuarios' as const, label: 'Usuários', icon: Users, color: '#f59e0b', count: perfis.length },
     { id: 'locais' as const, label: 'Locais', icon: Building2, color: '#16a34a', count: locais.length },
     { id: 'modelos' as const, label: 'Modelos de Ação', icon: Workflow, color: '#7114dd', count: tiposAcoes.length },
     { id: 'documentos' as const, label: 'Documentos', icon: FileType, color: '#2563eb', count: categoriasDocumento.length + formatosDocumento.length },
   ]
 
   return (
-    <div className="min-h-screen p-4 md:p-8 bg-gradient-to-br from-purple-100 to-purple-200 text-slate-800 font-sans">
+    <div className="min-h-screen p-4 md:p-8 bg-gradient-to-br from-slate-100 via-white to-slate-200 text-slate-800 font-sans">
       <header className="mb-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -226,7 +315,7 @@ export default function AdminPage() {
                 <Plus size={18}/> Novo Setor
               </button>
             )}
-            {activeTab === 'locais' && (
+      {activeTab === 'locais' && (
               <button onClick={() => setActiveModal('local')} className="bg-white text-green-600 border border-green-200 px-4 py-2 rounded-xl hover:bg-green-50 transition shadow-sm flex items-center gap-2 font-bold text-sm">
                 <Plus size={18}/> Novo Local
               </button>
@@ -452,6 +541,129 @@ export default function AdminPage() {
         </div>
       )}
 
+      {activeTab === 'usuarios' && (
+        <div className="space-y-4">
+          <div className="relative max-w-md">
+            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input type="text" placeholder="Buscar usuário por nome ou email..." value={searchAdminPerfil} onChange={(e) => setSearchAdminPerfil(e.target.value)} className="w-full pl-9 pr-4 py-2.5 border rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-500" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {perfis.filter(p => 
+              p.nome.toLowerCase().includes(searchAdminPerfil.toLowerCase()) ||
+              p.email.toLowerCase().includes(searchAdminPerfil.toLowerCase())
+            ).length === 0 ? (
+              <div className="col-span-full text-center py-16 bg-white rounded-2xl border">
+                <Users size={48} className="mx-auto text-gray-300 mb-3" />
+                <p className="text-gray-500 font-medium">Nenhum usuário encontrado</p>
+              </div>
+            ) : perfis.filter(p => 
+              p.nome.toLowerCase().includes(searchAdminPerfil.toLowerCase()) ||
+              p.email.toLowerCase().includes(searchAdminPerfil.toLowerCase())
+            ).map((perfil) => {
+              const nivel = (perfil.nivel_acesso || 'tecnico') as string
+              const nivelLabel: Record<string, string> = {
+                tecnico: 'Técnico',
+                gerencial: 'Gerencial',
+                diretivo: 'Diretivo',
+                administrativo: 'Administrativo'
+              }
+              const nivelColors: Record<string, string> = {
+                tecnico: 'bg-gray-100 text-gray-700',
+                gerencial: 'bg-blue-100 text-blue-700',
+                diretivo: 'bg-purple-100 text-purple-700',
+                administrativo: 'bg-amber-100 text-amber-700'
+              }
+              const nivelDotColors: Record<string, string> = {
+                tecnico: 'bg-gray-500',
+                gerencial: 'bg-blue-500',
+                diretivo: 'bg-purple-500',
+                administrativo: 'bg-amber-500'
+              }
+              const setoresDoUsuario = setores.filter(s => s.pessoas?.includes(perfil.id))
+              
+              return (
+                <div key={perfil.id} className="border bg-white p-4 rounded-2xl shadow-sm relative group hover:shadow-md transition">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                      <span className="text-amber-600 font-bold text-sm">{perfil.nome.charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-slate-900 text-sm truncate">{perfil.nome}</h3>
+                      <p className="text-xs text-gray-500 truncate">{perfil.email}</p>
+                      <span className={`inline-flex items-center gap-1 mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${nivelColors[nivel] || 'bg-gray-100 text-gray-700'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${nivelDotColors[nivel] || 'bg-gray-500'}`}></span>
+                        {nivelLabel[nivel] || nivel}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">Nível de Acesso</label>
+                      {isSuperAdmin ? (
+                        <select
+                          value={nivel}
+                          onChange={(e) => handleUpdateNivelAcesso(perfil.id, e.target.value)}
+                          className="w-full mt-1 p-2 text-xs border rounded-lg bg-white focus:ring-2 focus:ring-purple-500"
+                        >
+                          <option value="tecnico">Técnico</option>
+                          <option value="gerencial">Gerencial</option>
+                          <option value="diretivo">Diretivo</option>
+                          <option value="administrativo">Administrativo</option>
+                        </select>
+                      ) : (
+                        <p className="text-xs font-medium text-gray-600 mt-1">{nivelLabel[nivel] || nivel}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase flex items-center justify-between">
+                        Setores ({setoresDoUsuario.length})
+                      </label>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {setoresDoUsuario.length === 0 ? (
+                          <span className="text-[10px] text-gray-400 italic">Nenhum setor</span>
+                        ) : (
+                          setoresDoUsuario.map(setor => (
+                            <span
+                              key={setor.id}
+                              onClick={() => isSuperAdmin && handleToggleSetorPessoa(setor.id, perfil.id, setor.pessoas || [])}
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isSuperAdmin ? 'cursor-pointer hover:bg-red-100 hover:text-red-600' : ''} bg-purple-100 text-purple-700`}
+                              title={isSuperAdmin ? 'Clique para remover do setor' : setor.nome}
+                            >
+                              {setor.nome}
+                              {isSuperAdmin && <span className="ml-0.5 text-red-400">×</span>}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                      {isSuperAdmin && setores.filter(s => !s.pessoas?.includes(perfil.id)).length > 0 && (
+                        <details className="mt-1.5">
+                          <summary className="text-[10px] text-purple-600 cursor-pointer hover:underline font-medium">
+                            + Adicionar a setor
+                          </summary>
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {setores.filter(s => !s.pessoas?.includes(perfil.id)).map(setor => (
+                              <button
+                                key={setor.id}
+                                onClick={() => handleToggleSetorPessoa(setor.id, perfil.id, setor.pessoas || [])}
+                                className="text-[10px] px-2 py-0.5 rounded-full border border-gray-200 bg-white hover:bg-purple-50 hover:border-purple-300 text-gray-600 font-medium transition"
+                              >
+                                {setor.nome}
+                              </button>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Modal de Setor */}
       {activeModal === 'setor' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -569,7 +781,7 @@ function FormCategoriaDocumento({ setores, dadosIniciais, onSuccess }: { setores
         <button type="button" onClick={onSuccess} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
       </div>
       <div className="space-y-2">
-        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome da Categoria *</label>
+        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome da Categoria</label>
         <input className="w-full border p-4 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 ring-blue-500 transition" placeholder="Ex: Ofício, Parecer, Plano de Aula" value={nome} onChange={e => setNome(e.target.value)} required />
       </div>
       <div className="space-y-2">
@@ -622,11 +834,11 @@ function FormFormatoDocumento({ dadosIniciais, onSuccess }: { dadosIniciais?: { 
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome *</label>
-          <input className="w-full border p-4 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 ring-blue-500 transition" placeholder="Ex: PDF" value={nome} onChange={e => setNome(e.target.value)} required />
+          <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome</label>
+          <input value={nome} onChange={e => setNome(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition" placeholder="Ex: Ofício" required />
         </div>
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-400 uppercase ml-1">Extensão *</label>
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase ml-1">Extensão</label>
           <input className="w-full border p-4 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 ring-blue-500 transition" placeholder="Ex: .pdf" value={extensao} onChange={e => setExtensao(e.target.value)} required />
         </div>
       </div>
@@ -719,7 +931,7 @@ function FormSetor({ listaDePerfis, onSuccess, dadosIniciais }: { listaDePerfis:
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome do Setor *</label>
+          <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome do Setor</label>
           <input 
             className="w-full border p-4 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 ring-[#7114dd] transition" 
             placeholder="Ex: Educação Infantil" 
@@ -872,7 +1084,7 @@ function FormLocal({ dadosIniciais, onSuccess }: { dadosIniciais?: Local | null,
 
       <div className="space-y-4">
         <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome do Local *</label>
+          <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome do Local</label>
           <input 
             className="w-full border p-4 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 ring-green-500 transition" 
             placeholder="Ex: EMEB Dalmario Souza" 

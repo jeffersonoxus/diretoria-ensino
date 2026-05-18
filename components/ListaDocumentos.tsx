@@ -1,6 +1,6 @@
 'use client'
 
-import { FileText, Download, ExternalLink, Clock, CheckCircle, XCircle, AlertTriangle, ThumbsDown, Trash2 } from 'lucide-react'
+import { FileText, Download, ExternalLink, Clock, CheckCircle, XCircle, AlertTriangle, ThumbsDown, Trash2, Building2 } from 'lucide-react'
 import { formatarTamanho } from '@/lib/documentos'
 
 function getIconInfo(nome: string) {
@@ -97,7 +97,10 @@ export default function ListaDocumentos({
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
               {categorias[doc.categoria_id || ''] && <span>{categorias[doc.categoria_id || '']}</span>}
               {formatos[doc.formato_id || ''] && <span>{formatos[doc.formato_id || '']}</span>}
-              <span>{setores[doc.setor_id] || 'Sem setor'}</span>
+              <span className="flex items-center gap-1">
+                <Building2 size={10} />
+                {setores[doc.setor_id] || 'Setor removido'}
+              </span>
               <span>{formatarTamanho(doc.arquivo_tamanho)}</span>
               <span>{new Date(doc.created_at).toLocaleDateString('pt-BR')}</span>
               <span>por {perfis[doc.criado_por] || 'Sistema'}</span>
@@ -149,7 +152,7 @@ export default function ListaDocumentos({
                 </button>
               </>
             )}
-            {doc.status === 'ativo' && isAdmin && (
+            {(doc.status === 'ativo' || doc.status === 'rejeitado') && isAdmin && (
               <button
                 onClick={() => onExcluir?.(doc.id)}
                 className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"

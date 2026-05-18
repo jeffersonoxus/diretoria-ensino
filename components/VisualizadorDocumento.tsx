@@ -98,7 +98,9 @@ export default function VisualizadorDocumento({
 
               <div>
                 <p className="text-xs text-gray-400 flex items-center gap-1"><Building2 size={12} /> Setor</p>
-                <p className="text-sm font-medium">{setores[doc.setor_id] || 'Sem setor'}</p>
+                <p className="text-sm font-medium">{setores[doc.setor_id] || (
+                  <span className="text-gray-400 italic">Setor removido</span>
+                )}</p>
               </div>
 
               <div>

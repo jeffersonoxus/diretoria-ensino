@@ -16,10 +16,13 @@ import {
   FileSpreadsheet,
   GraduationCap,
   ClipboardCheck,
-  Smartphone,
-  FileText
+  FileText,
+  BarChart3,
+  Users,
+  Target
 } from 'lucide-react';
 import { useSetorEJA } from '@/hooks/useSetorEJA'
+import { NIVEL_LABELS, NIVEL_COLORS, NIVEL_DOT_COLORS, type NivelAcesso } from '@/hooks/useNivelAcesso'
 
 interface User {
   email?: string
@@ -37,6 +40,7 @@ export const Sidebar = () => {
   const [temSetor, setTemSetor] = useState(false)
   const [loadingSetor, setLoadingSetor] = useState(true)
   const [documentosPendentes, setDocumentosPendentes] = useState(0)
+  const [nivelAcesso, setNivelAcesso] = useState<NivelAcesso | null>(null)
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -111,11 +115,12 @@ export const Sidebar = () => {
     if (user?.email) {
       const { data } = await supabase
         .from('perfis')
-        .select('id, nome')
+        .select('id, nome, nivel_acesso')
         .eq('email', user.email)
         .single()
       if (data) {
         setPerfil(data)
+        setNivelAcesso(data.nivel_acesso || 'tecnico')
       }
     }
   }
@@ -126,20 +131,22 @@ export const Sidebar = () => {
     router.refresh()
   }
 
-  // Verificar se o usuário é admin
-  const isAdmin = user?.email === 'admin@exemplo.com' || user?.email === 'jeffersonoxus@gmail.com'
+  // Verificar se o usuário é admin (diretivo ou administrativo)
+  const isAdmin = nivelAcesso === 'diretivo' || nivelAcesso === 'administrativo'
+  const isSuperAdmin = nivelAcesso === 'administrativo'
 
   // Definir quais menus mostrar baseado se o usuário tem setor
   const getMenuItems = () => {
-    // ADMIN: mostra todos os menus (mesmo sem setor)
+    // ADMIN: mostra menus conforme temSetor
     if (isAdmin) {
       return [
         { href: '/agenda', icon: Home, label: 'Agenda', show: true },
         { href: '/agenda/perfil', icon: User, label: 'Meu Perfil', show: true },
+        { href: '/agenda/indicadores', icon: BarChart3, label: 'Indicadores', show: temSetor },
         { href: '/agenda/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
-        { href: '/agenda/documentos', icon: FileText, label: 'Documentos', show: true, badge: documentosPendentes },
+        { href: '/agenda/documentos', icon: FileText, label: 'Documentos', show: temSetor, badge: documentosPendentes },
         { href: '/agenda/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
-        { href: '/app', icon: Smartphone, label: 'App Mobile', show: temSetor, external: true },
+        { href: '/agenda/planos', icon: Target, label: 'Planos de Ação', show: true },
       ]
     }
     
@@ -154,10 +161,11 @@ export const Sidebar = () => {
     return [
       { href: '/agenda', icon: Home, label: 'Agenda', show: true },
       { href: '/agenda/perfil', icon: User, label: 'Meu Perfil', show: true },
+      { href: '/agenda/indicadores', icon: BarChart3, label: 'Indicadores', show: true },
       { href: '/agenda/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
       { href: '/agenda/documentos', icon: FileText, label: 'Documentos', show: true },
       { href: '/agenda/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
-      { href: '/app', icon: Smartphone, label: 'App Mobile', show: temSetor, external: true },
+      { href: '/agenda/planos', icon: Target, label: 'Planos de Ação', show: true },
     ]
   }
 
@@ -280,6 +288,12 @@ export const Sidebar = () => {
                 <p className="text-xs text-gray-500 truncate">
                   {user?.email || 'Carregando...'}
                 </p>
+                {nivelAcesso && (
+                  <span className={`inline-flex items-center gap-1 mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full ${NIVEL_COLORS[nivelAcesso]}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${NIVEL_DOT_COLORS[nivelAcesso]}`}></span>
+                    {NIVEL_LABELS[nivelAcesso]}
+                  </span>
+                )}
                 {!temSetor && !isAdmin && (
                   <p className="text-xs text-amber-600 mt-1">
                     ⚠️ Sem vínculo com setor
@@ -293,8 +307,7 @@ export const Sidebar = () => {
           <nav className="flex-1 overflow-y-auto p-4">
             <ul className="space-y-1">
               {menuItems.filter(item => item.show).map((item: any) => {
-                const isActive = pathname === item.href || 
-                  (item.href === '/app' && pathname?.startsWith('/app'))
+                const isActive = pathname === item.href
                 return (
                   <li key={item.href}>
                     <Link
@@ -326,31 +339,32 @@ export const Sidebar = () => {
                 )
               })}
               
-              {/* Seção Admin separada - só aparece se for admin */}
-              {isAdmin && (
-                <>
-                  <div className="pt-4 mt-4 border-t">
-                    <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                      Administração
-                    </p>
-                    <Link
-                      href={'/admin'}
-                      onClick={closeSidebar}
-                      className={`
-                        flex items-center space-x-3 px-4 py-3 rounded-xl
-                        transition-all duration-200 group
-                        ${pathname === '/admin'
-                          ? 'bg-[#ffa301]/20 text-[#ffa301] shadow-sm' 
-                          : 'text-gray-600 hover:bg-[#ffa301]/10 hover:text-[#ffa301]'
-                        }
-                      `}
-                    >
-                      <ShieldUser className={`h-5 w-5 transition ${pathname === '/admin' ? 'text-[#ffa301]' : 'text-gray-400 group-hover:text-[#ffa301]'}`} />
-                      <span className="text-sm font-medium">Painel Admin</span>
-                    </Link>
-                  </div>
-                </>
-              )}
+                  {/* Seção Admin separada - só aparece se for admin */}
+                  {isAdmin && (
+                    <>
+                      <div className="pt-4 mt-4 border-t">
+                        <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                          Administração
+                        </p>
+                        <Link
+                          href={'/admin'}
+                          onClick={closeSidebar}
+                          className={`
+                            flex items-center space-x-3 px-4 py-3 rounded-xl
+                            transition-all duration-200 group
+                            ${pathname === '/admin'
+                              ? 'bg-[#ffa301]/20 text-[#ffa301] shadow-sm' 
+                              : 'text-gray-600 hover:bg-[#ffa301]/10 hover:text-[#ffa301]'
+                            }
+                          `}
+                        >
+                          <ShieldUser className={`h-5 w-5 transition ${pathname === '/admin' ? 'text-[#ffa301]' : 'text-gray-400 group-hover:text-[#ffa301]'}`} />
+                          <span className="text-sm font-medium">Painel Admin</span>
+                        </Link>
+
+                      </div>
+                    </>
+                  )}
             </ul>
           </nav>
 

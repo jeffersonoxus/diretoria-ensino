@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Calendar, Car, EyeOff, Eye } from "lucide-react"
+import { Calendar, Car, EyeOff, Eye, AlertCircle, CheckCircle2, X, Bus } from "lucide-react"
 
 export interface ParametroExtra {
   id: string
@@ -100,19 +100,18 @@ export const formatarDataParaExibicaoLista = (dataUTC: string): string => {
   })
 }
 
-const DateOnlyInput = ({ value, onChange, label, required = false }: { value: string, onChange: (value: string) => void, label: string, required?: boolean }) => {
+const DateOnlyInput = ({ value, onChange, label, required = false, invalid = false }: { value: string, onChange: (value: string) => void, label: string, required?: boolean, invalid?: boolean }) => {
   const [dateValue, setDateValue] = useState('')
-  const [timeValue, setTimeValue] = useState('08:00')
+  const [timeValue, setTimeValue] = useState('')
 
   useEffect(() => {
     if (value) {
       const [datePart, timePart] = value.split('T')
       setDateValue(datePart || '')
-      if (timePart) setTimeValue(timePart)
-      else setTimeValue('08:00')
+      setTimeValue(timePart || '')
     } else {
       setDateValue('')
-      setTimeValue('08:00')
+      setTimeValue('')
     }
   }, [value])
 
@@ -120,6 +119,10 @@ const DateOnlyInput = ({ value, onChange, label, required = false }: { value: st
     setDateValue(date)
     if (date && timeValue) {
       onChange(`${date}T${timeValue}`)
+    } else if (date) {
+      onChange(date)
+    } else {
+      onChange('')
     }
   }
 
@@ -127,6 +130,8 @@ const DateOnlyInput = ({ value, onChange, label, required = false }: { value: st
     setTimeValue(time)
     if (dateValue && time) {
       onChange(`${dateValue}T${time}`)
+    } else if (time) {
+      setDateValue(dateValue)
     }
   }
 
@@ -140,7 +145,7 @@ const DateOnlyInput = ({ value, onChange, label, required = false }: { value: st
   return (
     <div className="space-y-2">
       <label className="block text-base font-bold text-gray-700">
-        {label} {required && '*'}
+        {label}
       </label>
       <div className="flex gap-2">
         <div
@@ -152,15 +157,16 @@ const DateOnlyInput = ({ value, onChange, label, required = false }: { value: st
             type="date"
             value={dateValue}
             onChange={(e) => handleDateChange(e.target.value)}
-            className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer bg-white"
+            className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer bg-white ${invalid && !dateValue ? 'border-red-400' : ''}`}
           />
           <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-purple-500 pointer-events-none" size={18} />
         </div>
         <select
           value={timeValue}
           onChange={(e) => handleTimeChange(e.target.value)}
-          className="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+          className={`p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white ${invalid && !timeValue ? 'border-red-400 text-red-600' : ''}`}
         >
+          {!timeValue && <option value="">Selecione</option>}
           {timeOptions.map((option) => (
             <option key={option.label} value={option.label}>{option.label}</option>
           ))}
@@ -177,6 +183,7 @@ interface FormNovaAcaoProps {
   usuarios: Usuario[]
   userPerfilId: string | null
   userSetoresIds: string[]
+  userNivelAcesso?: string
   editandoAcao?: Acao | null
   defaultDataInicio?: string
   defaultDataFim?: string
@@ -193,6 +200,7 @@ export default function FormNovaAcao({
   usuarios,
   userPerfilId,
   userSetoresIds,
+  userNivelAcesso,
   editandoAcao,
   defaultDataInicio,
   defaultDataFim,
@@ -217,9 +225,13 @@ export default function FormNovaAcao({
   const [observacoes, setObservacoes] = useState('')
   const [mostrarCamposPersonalizados, setMostrarCamposPersonalizados] = useState(false)
   const [setorInicialAuto, setSetorInicialAuto] = useState(true)
+  const [mensagemErro, setMensagemErro] = useState<string | null>(null)
+  const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
 
-  const setoresDisponiveis = setores.filter(s => userSetoresIds.includes(s.id))
-  const setoresEnvolvidosDisponiveis = setores.filter(s => userSetoresIds.includes(s.id) && s.id !== setorSelecionado)
+  const temAcessoAmplo = userNivelAcesso === 'gerencial' || userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo'
+  const setoresDisponiveis = temAcessoAmplo ? setores : setores.filter(s => userSetoresIds.includes(s.id))
+  const todosSetoresParaEnvolver = setores.filter(s => s.id !== setorSelecionado)
 
   const carregarPessoasDoSetor = async (setorId: string) => {
     const setor = setores.find(s => s.id === setorId)
@@ -357,6 +369,8 @@ export default function FormNovaAcao({
   }
 
   const resetForm = () => {
+    setMensagemErro(null)
+    setMensagemSucesso(null)
     setDescricao('')
     setPessoas([])
     setSetoresSelecionados([])
@@ -386,8 +400,16 @@ export default function FormNovaAcao({
   }
 
   const salvarAcao = async () => {
-    if (!setorSelecionado) return alert("Selecione um setor")
-    if (!tipoAcaoId) return alert("Selecione o Tipo de Ação")
+    setMensagemErro(null)
+    setMensagemSucesso(null)
+
+    if (!setorSelecionado) { setMensagemErro("Selecione um setor responsável"); return }
+    if (!tipoAcaoId) { setMensagemErro("Selecione o Tipo de Ação"); return }
+    if (!local) { setMensagemErro("Selecione o Local"); return }
+    if (!dataInicio?.includes('T')) { setMensagemErro("Preencha a data e horário de início"); return }
+    if (!dataFim?.includes('T')) { setMensagemErro("Preencha a data e horário de término"); return }
+
+    setSalvando(true)
 
     let pessoasFinal = [...pessoas]
     if (nomeResponsavel && !pessoasFinal.includes(nomeResponsavel)) {
@@ -409,27 +431,48 @@ export default function FormNovaAcao({
       observacoes
     }
 
-    if (editandoAcao) {
-      await supabase.from('acoes').update({
-        ...dadosComuns,
-        updated_at: new Date().toISOString(),
-        updated_by: userPerfilId
-      }).eq('id', editandoAcao.id)
-    } else {
-      await supabase.from('acoes').insert([{
-        ...dadosComuns,
-        created_at: new Date().toISOString(),
-        created_by: userPerfilId,
-        updated_at: new Date().toISOString(),
-        updated_by: userPerfilId
-      }])
+    const { error } = editandoAcao
+      ? await supabase.from('acoes').update({
+          ...dadosComuns,
+          updated_at: new Date().toISOString(),
+          updated_by: userPerfilId
+        }).eq('id', editandoAcao.id)
+      : await supabase.from('acoes').insert([{
+          ...dadosComuns,
+          created_at: new Date().toISOString(),
+          created_by: userPerfilId,
+          updated_at: new Date().toISOString(),
+          updated_by: userPerfilId
+        }])
+
+    setSalvando(false)
+
+    if (error) {
+      setMensagemErro("Erro ao salvar: " + error.message)
+      return
     }
+
+    setMensagemSucesso(editandoAcao ? "Ação atualizada com sucesso!" : "Ação criada com sucesso!")
+    setTimeout(() => setMensagemSucesso(null), 3000)
 
     resetForm()
     onSave()
   }
 
   const tipoAcaoSelecionado = tiposAcoes.find(ta => ta.id === tipoAcaoId)
+
+  const dataInicioValida = dataInicio?.includes('T')
+  const dataFimValida = dataFim?.includes('T')
+  const podeSalvar = tipoAcaoId && local && dataInicioValida && dataFimValida
+
+  const camposObrigatorios = [
+    { nome: 'Tipo de Ação', valido: !!tipoAcaoId },
+    { nome: 'Local', valido: !!local },
+    { nome: 'Data de Início', valido: dataInicioValida },
+    { nome: 'Data de Término', valido: dataFimValida },
+  ]
+
+  const todosValidos = camposObrigatorios.every(c => c.valido)
 
   return (
     <div className="space-y-4">
@@ -441,6 +484,24 @@ export default function FormNovaAcao({
           )}
         </div>
       )}
+
+      {mensagemErro && (
+        <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-300 rounded-xl text-red-700 animate-pulse">
+          <AlertCircle size={20} className="shrink-0" />
+          <span className="font-medium">{mensagemErro}</span>
+          <button onClick={() => setMensagemErro(null)} className="ml-auto text-red-400 hover:text-red-600"><X size={18} /></button>
+        </div>
+      )}
+
+      {mensagemSucesso && (
+        <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-300 rounded-xl text-green-700">
+          <CheckCircle2 size={20} className="shrink-0" />
+          <span className="font-medium">{mensagemSucesso}</span>
+          <button onClick={() => setMensagemSucesso(null)} className="ml-auto text-green-400 hover:text-green-600"><X size={18} /></button>
+        </div>
+      )}
+
+
 
       {setoresDisponiveis.length > 1 && (
         <div className="p-5 rounded-xl border-2">
@@ -462,104 +523,197 @@ export default function FormNovaAcao({
 
       {setorSelecionado && (
         <>
-          <div>
-            <label className="block text-base font-bold text-gray-700 mb-2">Tipo de Ação *</label>
-            <select
-              value={tipoAcaoId}
-              onChange={(e) => setTipoAcaoId(e.target.value)}
-              className="w-full p-3 font-bold border rounded-lg focus:ring-2 focus:ring-purple-500"
-            >
-              <option value="">Selecione</option>
-              {tiposAcoes.filter(ta => ta.setores_ids?.includes(setorSelecionado)).map(ta => (
-                <option key={ta.id} value={ta.id}>{ta.nome}</option>
-              ))}
-            </select>
-          </div>
-
-          <textarea
-            placeholder="Descrição da ação..."
-            value={descricao}
-            onChange={(e) => setDescricao(e.target.value)}
-            rows={3}
-            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500"
-          />
-
-          <div className="grid font-bold md:grid-cols-2 gap-4">
-            <select value={local} onChange={(e) => setLocal(e.target.value)} className="p-3 border rounded-lg">
-              <option value="">Local (Escola)</option>
-              {locais.map(l => <option key={l.id} value={l.nome}>{l.nome}</option>)}
-            </select>
-
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className="p-3 border rounded-lg">
-              {STATUS_OPCOES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-
-            <DateOnlyInput value={dataInicio} onChange={setDataInicio} label="Data de Início" />
-
-            <DateOnlyInput value={dataFim} onChange={setDataFim} label="Data de Término (opcional)" />
-
-            <div className="flex items-center">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={necessitaTransporte} onChange={(e) => setNecessitaTransporte(e.target.checked)} className="accent-purple-600" />
-                <Car size={20} className="text-purple-600" />
-                <span>Necessita Transporte</span>
-              </label>
-            </div>
-          </div>
-
-          {setoresEnvolvidosDisponiveis.length > 0 && (
-            <div>
-              <label className="block text-base font-bold text-gray-700 mb-2">Setores Envolvidos</label>
-              <div className="flex flex-wrap gap-2">
-                {setoresEnvolvidosDisponiveis.map(setor => (
-                  <button
-                    key={setor.id}
-                    onClick={() => toggleSetor(setor.id)}
-                    className={`px-3 py-1.5 rounded-full text-base transition ${
-                      setoresSelecionados.includes(setor.id) ? "bg-purple-600 text-white" : "bg-gray-200 hover:bg-gray-200"
-                    }`}
-                  >
-                    {setor.nome}
-                  </button>
-                ))}
+          {/* Seção: Informações Básicas */}
+          <div className="p-5 rounded-xl border-2 border-purple-100 bg-purple-50/30">
+            <h3 className="text-base font-bold text-purple-700 mb-4 flex items-center gap-2">
+              <span className="w-1.5 h-5 bg-purple-500 rounded-full inline-block" />
+              Informações Básicas
+            </h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-base font-bold text-gray-700 mb-2">Tipo de Ação</label>
+                <select
+                  value={tipoAcaoId}
+                  onChange={(e) => setTipoAcaoId(e.target.value)}
+                  className={`w-full p-3 font-bold border rounded-lg focus:ring-2 focus:ring-purple-500 ${!tipoAcaoId ? 'border-red-400' : ''}`}
+                >
+                  <option value="">Selecione</option>
+                  {tiposAcoes.filter(ta => ta.setores_ids?.includes(setorSelecionado)).map(ta => (
+                    <option key={ta.id} value={ta.id}>{ta.nome}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-base font-bold text-gray-700 mb-2">Local</label>
+                <select value={local} onChange={(e) => setLocal(e.target.value)} className={`w-full p-3 border rounded-lg ${!local ? 'border-red-400' : ''}`}>
+                  <option value="">Selecione o local</option>
+                  {locais.map(l => <option key={l.id} value={l.nome}>{l.nome}</option>)}
+                </select>
               </div>
             </div>
-          )}
+          </div>
 
-          <div>
-            <label className="block text-base font-bold text-gray-700 mb-2">Pessoas Envolvidas</label>
-            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border rounded-lg bg-gray-50">
-              {usuarios.length > 0 ? (
-                usuarios.map(user => {
-                  const nomeExibicao = user.nome?.trim() || user.email
-                  const isSelected = pessoas.includes(nomeExibicao)
-                  const isResponsavel = nomeExibicao === nomeResponsavel
-                  return (
-                    <button
-                      key={user.id}
-                      onClick={() => togglePessoa(nomeExibicao)}
-                      className={`px-3 py-1.5 rounded-full text-base transition ${
-                        isSelected
-                          ? "bg-amber-400 text-purple-900 font-medium shadow-sm"
-                          : "bg-white text-gray-700 border hover:bg-gray-100"
-                      } ${isResponsavel ? "ring-2 ring-purple-500 ring-offset-1" : ""}`}
-                      title={isResponsavel ? "Responsável pela ação (não pode ser removido)" : ""}
-                    >
-                      {nomeExibicao} {isResponsavel && "⭐"}
-                    </button>
-                  )
-                })
-              ) : (
-                <p className="text-gray-500 text-sm p-2">Nenhuma pessoa encontrada</p>
-              )}
+          {/* Seção: Data e Hora */}
+          <div className="p-5 rounded-xl border-2 border-blue-100 bg-blue-50/30">
+            <h3 className="text-base font-bold text-blue-700 mb-4 flex items-center gap-2">
+              <span className="w-1.5 h-5 bg-blue-500 rounded-full inline-block" />
+              Data e Hora
+            </h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <DateOnlyInput value={dataInicio} onChange={setDataInicio} label="Data de Início" required invalid={!dataInicio?.includes('T')} />
+              <DateOnlyInput value={dataFim} onChange={setDataFim} label="Data de Término" required invalid={!dataFim?.includes('T')} />
             </div>
-            <p className="text-base text-gray-700 mt-1">
-              ⭐ Você é o responsável e não pode ser removido. As pessoas do setor responsável já estão selecionadas automaticamente.
-            </p>
+          </div>
+
+          {/* Seção: Detalhamento */}
+          <div className="p-5 rounded-xl border-2 border-emerald-100 bg-emerald-50/30">
+            <h3 className="text-base font-bold text-emerald-700 mb-4 flex items-center gap-2">
+              <span className="w-1.5 h-5 bg-emerald-500 rounded-full inline-block" />
+              Detalhamento
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-base font-bold text-gray-700 mb-2">Descrição</label>
+                <textarea
+                  placeholder="Descreva a ação..."
+                  value={descricao}
+                  onChange={(e) => setDescricao(e.target.value)}
+                  rows={3}
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-base font-bold text-gray-700 mb-2">Status</label>
+                  <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full p-3 border rounded-lg font-medium">
+                    {STATUS_OPCOES.map(s => {
+                      const statusColors: Record<string, string> = {
+                        'Pendente': 'text-yellow-600',
+                        'Realizada': 'text-green-600',
+                        'Realizada Parcialmente': 'text-blue-600',
+                        'Cancelada': 'text-red-600',
+                        'Reagendada': 'text-purple-600'
+                      }
+                      const statusDots: Record<string, string> = {
+                        'Pendente': 'bg-yellow-500',
+                        'Realizada': 'bg-green-500',
+                        'Realizada Parcialmente': 'bg-blue-500',
+                        'Cancelada': 'bg-red-500',
+                        'Reagendada': 'bg-purple-500'
+                      }
+                      return (
+                        <option key={s} value={s} className={`font-medium ${statusColors[s] || ''}`}>
+                          {s}
+                        </option>
+                      )
+                    })}
+                  </select>
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${status === 'Pendente' ? 'bg-yellow-500' : status === 'Realizada' ? 'bg-green-500' : status === 'Realizada Parcialmente' ? 'bg-blue-500' : status === 'Cancelada' ? 'bg-red-500' : status === 'Reagendada' ? 'bg-purple-500' : 'bg-gray-300'}`}></span>
+                    <span className={`text-xs font-medium ${status === 'Pendente' ? 'text-yellow-600' : status === 'Realizada' ? 'text-green-600' : status === 'Realizada Parcialmente' ? 'text-blue-600' : status === 'Cancelada' ? 'text-red-600' : status === 'Reagendada' ? 'text-purple-600' : 'text-gray-500'}`}>{status}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-base font-bold text-gray-700 mb-2">Transporte</label>
+                  <button
+                    type="button"
+                    onClick={() => setNecessitaTransporte(!necessitaTransporte)}
+                    className={`w-full flex items-center justify-center gap-3 p-3 rounded-xl border-2 font-bold text-base transition-all ${
+                      necessitaTransporte
+                        ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-200 scale-[1.02]'
+                        : 'border-gray-300 bg-white text-gray-500 hover:border-blue-300 hover:text-blue-500'
+                    }`}
+                  >
+                    <Bus size={22} className={necessitaTransporte ? 'text-white' : ''} />
+                    {necessitaTransporte ? 'TRANSPORTE SOLICITADO' : 'Necessita Transporte?'}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-base font-bold text-gray-700 mb-2">Observações</label>
+                <textarea
+                  placeholder="Observações..."
+                  value={observacoes}
+                  onChange={(e) => setObservacoes(e.target.value)}
+                  rows={2}
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Seção: Setores */}
+          <div className="p-5 rounded-xl border-2 border-pink-100 bg-pink-50/30">
+            <h3 className="text-base font-bold text-pink-700 mb-4 flex items-center gap-2">
+              <span className="w-1.5 h-5 bg-pink-500 rounded-full inline-block" />
+              Setores Envolvidos
+            </h3>
+            <p className="text-sm text-gray-500 mb-3">Clique nos setores para adicionar/remover automaticamente suas pessoas nos participantes.</p>
+            <div className="flex flex-wrap gap-2">
+              {todosSetoresParaEnvolver.map(setor => (
+                <button
+                  key={setor.id}
+                  onClick={() => toggleSetor(setor.id)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    setoresSelecionados.includes(setor.id)
+                      ? "bg-purple-600 text-white shadow-md scale-105"
+                      : "bg-white border-2 border-gray-200 text-gray-600 hover:border-purple-300 hover:text-purple-600"
+                  }`}
+                >
+                  {setor.nome}
+                  {setoresSelecionados.includes(setor.id) && (
+                    <span className="ml-1.5 bg-white/20 px-1.5 py-0.5 rounded-full text-xs">
+                      {setor.pessoas?.length || 0} 👤
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Seção: Participantes */}
+          <div className="p-5 rounded-xl border-2 border-amber-100 bg-amber-50/30">
+            <h3 className="text-base font-bold text-amber-700 mb-4 flex items-center gap-2">
+              <span className="w-1.5 h-5 bg-amber-500 rounded-full inline-block" />
+              Participantes
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-base font-bold text-gray-700 mb-2">Pessoas Envolvidas</label>
+                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-4 border rounded-lg bg-white">
+                  {usuarios.length > 0 ? (
+                    usuarios.map(user => {
+                      const nomeExibicao = user.nome?.trim() || user.email
+                      const isSelected = pessoas.includes(nomeExibicao)
+                      const isResponsavel = nomeExibicao === nomeResponsavel
+                      return (
+                        <button
+                          key={user.id}
+                          onClick={() => togglePessoa(nomeExibicao)}
+                          className={`px-3 py-1.5 rounded-full text-sm transition ${
+                            isSelected
+                              ? "bg-amber-400 text-purple-900 font-medium shadow-sm"
+                              : "bg-white text-gray-700 border hover:bg-gray-100"
+                          } ${isResponsavel ? "ring-2 ring-purple-500 ring-offset-1" : ""}`}
+                          title={isResponsavel ? "Responsável pela ação (não pode ser removido)" : ""}
+                        >
+                          {nomeExibicao} {isResponsavel && "⭐"}
+                        </button>
+                      )
+                    })
+                  ) : (
+                    <p className="text-gray-500 text-sm p-2">Nenhuma pessoa encontrada</p>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 mt-1">
+                  ⭐ Você é o responsável e não pode ser removido.
+                </p>
+              </div>
+            </div>
           </div>
 
           {tipoAcaoSelecionado && tipoAcaoSelecionado.parametros_extras && tipoAcaoSelecionado.parametros_extras.length > 0 && (
-            <div className="border-t pt-4">
+            <div className="p-5 rounded-xl border-2 border-gray-100 bg-gray-50/30">
               <button
                 onClick={() => setMostrarCamposPersonalizados(!mostrarCamposPersonalizados)}
                 className="flex items-center gap-2 text-purple-600 hover:text-purple-700 font-medium mb-3"
@@ -569,7 +723,7 @@ export default function FormNovaAcao({
               </button>
 
               {mostrarCamposPersonalizados && (
-                <div className="space-y-3">
+                <div className="grid md:grid-cols-2 gap-4">
                   {tipoAcaoSelecionado.parametros_extras.map(param => (
                     <div key={param.id}>
                       <label className="block text-base font-medium text-gray-700 mb-1">{param.label}</label>
@@ -581,21 +735,17 @@ export default function FormNovaAcao({
             </div>
           )}
 
-          <textarea
-            placeholder="Observações..."
-            value={observacoes}
-            onChange={(e) => setObservacoes(e.target.value)}
-            rows={2}
-            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500"
-          />
-
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-6 border-t mt-6">
             <button
               onClick={salvarAcao}
-              disabled={!tipoAcaoId}
-              className="flex-1 bg-linear-to-r from-purple-600 to-indigo-600 text-white font-bold px-6 py-3 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition shadow-md disabled:opacity-50"
+              disabled={!podeSalvar || salvando}
+              className="flex-1 bg-linear-to-r from-purple-600 to-indigo-600 text-white font-bold px-6 py-3 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {editandoAcao ? 'Atualizar' : 'Criar'} Ação
+              {salvando ? (
+                <><span className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></span> Salvando...</>
+              ) : (
+                <>{editandoAcao ? 'Atualizar' : 'Criar'} Ação</>
+              )}
             </button>
             <button onClick={resetForm} className="px-6 py-3 border rounded-lg hover:bg-gray-50 transition">Limpar</button>
           </div>

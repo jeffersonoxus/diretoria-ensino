@@ -36,6 +36,7 @@ export default function AcoesPage() {
   const [userNome, setUserNome] = useState<string>('')
   const [userEmail, setUserEmail] = useState<string>('')
   const [userSetoresIds, setUserSetoresIds] = useState<string[]>([])
+  const [userNivelAcesso, setUserNivelAcesso] = useState<string>('tecnico')
   const [loading, setLoading] = useState(true)
   const [editandoAcao, setEditandoAcao] = useState<Acao | null>(null)
   const [formExpandido, setFormExpandido] = useState(true)
@@ -57,11 +58,11 @@ export default function AcoesPage() {
   }, [])
 
   useEffect(() => {
-    if (userPerfilId && userSetoresIds.length > 0) {
+    if (userPerfilId) {
       fetchAcoes()
       carregarTodosUsuarios()
     }
-  }, [userPerfilId, userSetoresIds])
+  }, [userPerfilId, userSetoresIds, userNivelAcesso])
 
   useEffect(() => {
     const now = new Date()
@@ -85,13 +86,14 @@ export default function AcoesPage() {
       
       const { data: perfil } = await supabase
         .from('perfis')
-        .select('id, nome, email')
+        .select('id, nome, email, nivel_acesso')
         .eq('email', user.email)
         .single()
-      
+       
       if (perfil) {
         setUserPerfilId(perfil.id)
         setUserNome(perfil.nome || perfil.email?.split('@')[0] || 'Usuário')
+        setUserNivelAcesso(perfil.nivel_acesso || 'tecnico')
         
         const { data: setoresData } = await supabase.from('setores').select('*')
         const setoresDoUsuario = setoresData?.filter(setor => 
@@ -105,6 +107,14 @@ export default function AcoesPage() {
   }
 
   const carregarTodosUsuarios = async () => {
+    const temAcessoAmplo = userNivelAcesso === 'gerencial' || userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo'
+    
+    if (temAcessoAmplo) {
+      const { data: perfis } = await supabase.from('perfis').select('id, nome, email')
+      if (perfis) setUsuarios(perfis)
+      return
+    }
+    
     if (userSetoresIds.length === 0) return
     
     const setoresDoUsuario = setores.filter(s => userSetoresIds.includes(s.id))
@@ -149,12 +159,15 @@ export default function AcoesPage() {
   }
 
   const fetchAcoes = async () => {
-    if (!userSetoresIds.length) return
-    const { data } = await supabase
-      .from('acoes')
-      .select('*')
-      .in('setor_id', userSetoresIds)
-      .order('created_at', { ascending: false })
+    const temAcessoAmplo = userNivelAcesso === 'gerencial' || userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo'
+    
+    let query = supabase.from('acoes').select('*').order('created_at', { ascending: false })
+    
+    if (!temAcessoAmplo && userSetoresIds.length > 0) {
+      query = query.in('setor_id', userSetoresIds)
+    }
+    
+    const { data } = await query
     
     if (data) {
       const userIds = new Set<string>()
@@ -196,8 +209,10 @@ export default function AcoesPage() {
 
   const setoresDisponiveis = setores.filter(s => userSetoresIds.includes(s.id))
 
+  const temAcessoAmplo = userNivelAcesso === 'gerencial' || userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo'
+
   if (loading) return <LoadingSpinner />
-  if (userSetoresIds.length === 0) return <SemSetor userPerfilId={userPerfilId} userNome={userNome} />
+  if (userSetoresIds.length === 0 && !temAcessoAmplo) return <SemSetor userPerfilId={userPerfilId} userNome={userNome} />
 
   const getNomeExibicao = (usuario: Usuario) => {
     return usuario.nome?.trim() || usuario.email
@@ -224,6 +239,7 @@ export default function AcoesPage() {
               usuarios={usuarios}
               userPerfilId={userPerfilId}
               userSetoresIds={userSetoresIds}
+              userNivelAcesso={userNivelAcesso}
               editandoAcao={editandoAcao}
               titulo={editandoAcao ? 'Editar Ação' : 'Nova Ação'}
               onSave={() => {

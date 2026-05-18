@@ -25,6 +25,7 @@ export default function AgendaPage() {
   const [userNome, setUserNome] = useState<string>('')
   const [userEmail, setUserEmail] = useState<string>('')
   const [userSetoresIds, setUserSetoresIds] = useState<string[]>([])
+  const [userNivelAcesso, setUserNivelAcesso] = useState<string>('tecnico')
   const [loadingAcesso, setLoadingAcesso] = useState(true)
   
   // ===== STATES EXISTENTES =====
@@ -94,13 +95,14 @@ export default function AgendaPage() {
       
       const { data: perfil } = await supabase
         .from('perfis')
-        .select('id, nome, email')
+        .select('id, nome, email, nivel_acesso')
         .eq('email', user.email)
         .single()
-      
+       
       if (perfil) {
         setUserPerfilId(perfil.id)
         setUserNome(perfil.nome || perfil.email?.split('@')[0] || 'Usuário')
+        setUserNivelAcesso(perfil.nivel_acesso || 'tecnico')
         
         const { data: setoresData } = await supabase.from('setores').select('*')
         const setoresDoUsuario = setoresData?.filter(setor => 
@@ -116,15 +118,16 @@ export default function AgendaPage() {
     }
   }
 
-  // ===== CARREGAR DADOS APENAS DOS SETORES DO USUÁRIO =====
+  // ===== CARREGAR DADOS DE TODOS OS SETORES (visão ampla da agenda) =====
   const carregarDados = async () => {
-    if (userSetoresIds.length === 0) return
+    const temAcessoAmplo = userNivelAcesso === 'gerencial' || userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo'
+    if (userSetoresIds.length === 0 && !temAcessoAmplo) return
     
     setLoading(true)
     
     const [acoesRes, setoresRes, perfisRes, tiposRes, locaisRes] = await Promise.all([
-      supabase.from('acoes').select('*').in('setor_id', userSetoresIds).order('data_inicio', { ascending: true }),
-      supabase.from('setores').select('*').in('id', userSetoresIds),
+      supabase.from('acoes').select('*').order('data_inicio', { ascending: true }),
+      supabase.from('setores').select('*'),
       supabase.from('perfis').select('id, nome'),
       supabase.from('tipo_acao').select('*'),
       supabase.from('locais').select('*').eq('ativo', true).order('nome')
@@ -206,6 +209,10 @@ export default function AgendaPage() {
   const formatarDataParaPreenchimento = (dia: Date, turno: string): string => {
     const hora = turno === 'Manhã' ? '08:00' : turno === 'Tarde' ? '14:00' : '19:00'
     return `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, '0')}-${String(dia.getDate()).padStart(2, '0')}T${hora}`
+  }
+
+  const formatarDataParaPreenchimentoData = (dia: Date): string => {
+    return `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, '0')}-${String(dia.getDate()).padStart(2, '0')}`
   }
 
   const turnos = ['Manhã', 'Tarde', 'Noite']
@@ -808,7 +815,9 @@ export default function AgendaPage() {
     )
   }
 
-  if (userSetoresIds.length === 0) {
+  const temAcessoAmplo = userNivelAcesso === 'gerencial' || userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo'
+
+  if (userSetoresIds.length === 0 && !temAcessoAmplo) {
     return <SemAcesso />
   }
 
@@ -1148,20 +1157,20 @@ export default function AgendaPage() {
               <div className="p-3 bg-gray-100 border-b border-gray-300 font-semibold text-gray-600 text-sm uppercase tracking-wider">Turno</div>
               {diasDaSemana.map((dia, idx) => {
                 const isToday = dia.toDateString() === new Date().toDateString()
-                return (<div key={idx} onClick={() => setModalNovaAcao({ dia, turno: 'Manhã' })} className={`p-3 text-center border-b border-gray-300 ${isToday ? 'bg-purple-100' : 'bg-gray-100'} cursor-pointer hover:bg-purple-200 transition-colors group relative`} title="Clique para criar uma ação nesta data"><p className="text-sm font-semibold text-gray-500 uppercase group-hover:text-purple-700">{dia.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</p><p className={`text-lg font-bold mt-1 ${isToday ? 'text-purple-700' : 'text-gray-700'} group-hover:text-purple-700`}>{dia.getDate()}</p><span className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"><Plus size={12} className="text-purple-500" /></span></div>)
+                return (<div key={idx} onClick={() => setModalNovaAcao({ dia, turno: 'Manhã' })} className={`p-3 text-center border-b border-gray-300 ${isToday ? 'bg-purple-50/70' : 'bg-gray-100'} cursor-pointer hover:bg-purple-200 transition-colors group relative`} title="Clique para criar uma ação nesta data"><p className="text-sm font-semibold text-gray-500 uppercase group-hover:text-purple-700">{dia.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</p><p className={`text-lg font-bold mt-1 ${isToday ? 'text-purple-700' : 'text-gray-700'} group-hover:text-purple-700`}>{dia.getDate()}</p><span className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"><Plus size={12} className="text-purple-500" /></span></div>)
               })}
             </div>
 
             {turnos.map((turno, turnoIndex) => {
-              const bgColor = turnoIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+              const bgColor = turno === 'Manhã' ? 'bg-blue-600/10' : turno === 'Tarde' ? 'bg-orange-600/10' : 'bg-slate-600/10'
               return (
                 <div
                   key={turno}
-                  className="grid"
+                  className={`grid${turnoIndex > 0 ? ' border-t border-gray-400/60' : ''}`}
                   style={{ gridTemplateColumns: `90px repeat(7, 1fr)` }}
                 >
-                  <div className={`p-3 flex items-center justify-center gap-2 text-sm font-medium border-b border-gray-200 ${bgColor}`}>
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${turno === 'Manhã' ? 'bg-blue-100 text-blue-600' : turno === 'Tarde' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600'}`}>
+                  <div className={`p-3 flex items-center justify-center gap-2 text-sm font-medium border-b-2 border-gray-400 ${bgColor}`}>
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${turno === 'Manhã' ? 'bg-blue-100 text-blue-600' : turno === 'Tarde' ? 'bg-orange-100 text-orange-600' : 'bg-slate-200 text-slate-700'}`}>
                       {turno === 'Manhã' && <Sun size={16} />}{turno === 'Tarde' && <Sun size={16} />}{turno === 'Noite' && <Moon size={16} />}
                     </div>
                     <span className="text-gray-700">{turno}</span>
@@ -1173,7 +1182,7 @@ export default function AgendaPage() {
                     const isToday = dia.toDateString() === new Date().toDateString()
                     
                     return (
-                      <div key={idx} onClick={() => setModalNovaAcao({ dia, turno })} className={`p-1.5 border-b border-gray-200 ${idx !== 6 ? 'border-r border-gray-100' : ''} ${bgColor} ${isToday ? 'ring-2 ring-inset ring-purple-400' : ''} cursor-pointer hover:bg-purple-50/50 transition-colors`}>
+                      <div key={idx} onClick={() => setModalNovaAcao({ dia, turno })} className={`p-1.5 border-b border-gray-300 ${idx !== 6 ? 'border-r border-gray-200' : ''} ${bgColor} ${isToday ? 'ring-1 ring-inset ring-purple-300/50' : ''} cursor-pointer hover:bg-purple-50/50 transition-colors`}>
                         <div className="space-y-1.5 min-h-[130px]">
                           {acoesNoTurno.length === 0 ? (<div className="h-full flex items-center justify-center py-6"><div className="w-1 h-1 rounded-full bg-gray-300"></div></div>) : (
                             acoesNoTurno.map((acao, acaoIdx) => {
@@ -1188,7 +1197,7 @@ export default function AgendaPage() {
                                   <div className="flex items-center justify-between mb-1.5"><div className="flex flex-1 items-center justify-between gap-1 text-gray-400"><Clock size={10} className="text-gray-700" /><span className="text-xs font-mono font-medium text-gray-600">{acao.horario}</span>{acao.status === 'Pendente' && <span className="ml-auto text-amber-500 font-bold">Pendente</span>}{acao.status === 'Realizada' && <span className="ml-auto text-green-500 font-bold">Realizada</span>}{acao.status === 'Cancelada' && <span className="ml-auto text-red-500 font-bold">Cancelada</span>}</div></div>
                                   <p className="text-xs font-semibold text-gray-800 mb-1 line-clamp-2 leading-tight">{nomeTipo.length > 30 ? nomeTipo.substring(0, 20) + '…' : nomeTipo}</p>
                                   {acao.local && (<div className="flex items-center gap-1 mb-1 text-gray-700"><MapPin size={9} /><span className="text-xs truncate">{acao.local.length > 22 ? acao.local.substring(0, 32) + '…' : acao.local}</span></div>)}
-                                  <div className="flex items-center gap-1 text-gray-700"><Building2 size={9} /><span className="text-xs truncate">{setorCriador?.nome?.length > 18 ? setorCriador.nome.substring(0, 18) + '…' : setorCriador?.nome || 'N/I'}</span>{acao.necessita_transporte && <Car size={12} className="text-blue-500 ml-auto" />}</div>
+                                  <div className="flex items-center gap-1 text-gray-700"><Building2 size={9} /><span className="text-xs truncate">{setorCriador?.nome?.length > 18 ? setorCriador.nome.substring(0, 18) + '…' : setorCriador?.nome || 'N/I'}</span>{acao.necessita_transporte && <Car size={16} className="text-blue-500 ml-auto animate-bounce" />}</div>
                                 </div>
                               )
                             })
@@ -1281,7 +1290,7 @@ export default function AgendaPage() {
       )}
 
       {/* Modal de Criação de Ação via Agenda */}
-      <Modal isOpen={modalNovaAcao !== null} onClose={() => setModalNovaAcao(null)} title="Nova Ação" maxWidth="max-w-3xl">
+      <Modal isOpen={modalNovaAcao !== null} onClose={() => setModalNovaAcao(null)} title="Nova Ação" maxWidth="max-w-5xl">
         <FormNovaAcao
           setores={setores}
           tiposAcoes={tiposAcoes}
@@ -1289,7 +1298,9 @@ export default function AgendaPage() {
           usuarios={usuarios}
           userPerfilId={userPerfilId}
           userSetoresIds={userSetoresIds}
+          userNivelAcesso={userNivelAcesso}
           defaultDataInicio={modalNovaAcao ? formatarDataParaPreenchimento(modalNovaAcao.dia, modalNovaAcao.turno) : undefined}
+          defaultDataFim={modalNovaAcao ? formatarDataParaPreenchimentoData(modalNovaAcao.dia) : undefined}
           defaultSetorId={userSetoresIds.length === 1 ? userSetoresIds[0] : undefined}
           onSave={() => {
             setModalNovaAcao(null)

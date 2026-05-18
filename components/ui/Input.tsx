@@ -24,13 +24,13 @@ export const Input: React.FC<InputProps> = ({
           border border-gray-300 rounded-lg
           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
           transition duration-200
-          ${error ? 'border-red-500' : ''}
+          ${error ? 'border-red-400' : ''}
           ${className}
         `}
         {...props}
       />
       {error && (
-        <p className="mt-1 text-sm text-red-600">{error}</p>
+        <p className="mt-1 text-sm text-red-500">{error}</p>
       )}
     </div>
   )
