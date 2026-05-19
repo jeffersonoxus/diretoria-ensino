@@ -6,10 +6,11 @@ import { createClient } from "@/lib/supabase/client"
 import { 
   Pencil, Trash2, Calendar, MapPin, Truck, Users, 
   List, ChevronDown, ChevronUp, 
-  User, CalendarDays, Clock as ClockIcon
+  User, CalendarDays, Clock as ClockIcon, AlertCircle
 } from "lucide-react"
 import FormNovaAcao, { formatarDataParaExibicaoLista } from '@/components/FormNovaAcao'
 import type { Acao as AcaoBase, Setor, TipoAcao, Usuario } from '@/components/FormNovaAcao'
+import { showToast } from '@/components/ui/Toast'
 
 interface Acao extends AcaoBase {
   created_by_nome?: string
@@ -45,6 +46,8 @@ export default function AcoesPage() {
   const [mostrarListaAcoes, setMostrarListaAcoes] = useState(false)
   const [mostrarMaisAcoes, setMostrarMaisAcoes] = useState(false)
   const [acoesVisiveis, setAcoesVisiveis] = useState<Acao[]>([])
+  const [modalExcluir, setModalExcluir] = useState<{ id: string; status?: string } | null>(null)
+  const [excluirCountdown, setExcluirCountdown] = useState(10)
 
   // Carregar dados iniciais
   useEffect(() => {
@@ -89,6 +92,14 @@ export default function AcoesPage() {
     
     setAcoesVisiveis(mostrarMaisAcoes ? acoes.slice(0, 50) : acoesDoMes.slice(0, 10))
   }, [acoes, mostrarMaisAcoes])
+
+  // Countdown para exclusão
+  useEffect(() => {
+    if (modalExcluir && excluirCountdown > 0) {
+      const timer = setTimeout(() => setExcluirCountdown(excluirCountdown - 1), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [modalExcluir, excluirCountdown])
 
   const getCurrentUserPerfil = async () => {
     try {
@@ -208,10 +219,25 @@ export default function AcoesPage() {
     setFormExpandido(true)
   }
 
-  const deleteAcao = async (id: string) => {
-    if (!confirm("Tem certeza?")) return
-    await supabase.from('acoes').delete().eq('id', id)
-    fetchAcoes()
+  const deleteAcao = async (id: string, status?: string) => {
+    if (status === 'Cancelada' && userNivelAcesso !== 'administrativo') {
+      showToast('Apenas usuários administrativos podem excluir ações canceladas', 'error')
+      return
+    }
+    setModalExcluir({ id, status })
+    setExcluirCountdown(10)
+  }
+
+  const confirmDelete = async () => {
+    if (!modalExcluir) return
+    try {
+      await supabase.from('acoes').delete().eq('id', modalExcluir.id)
+      setModalExcluir(null)
+      fetchAcoes()
+      showToast('Ação excluída com sucesso!')
+    } catch (err: any) {
+      showToast('Erro ao excluir: ' + (err.message || 'Erro desconhecido'), 'error')
+    }
   }
 
   const carregarParaEdicao = (acao: Acao) => {
@@ -232,6 +258,7 @@ export default function AcoesPage() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
@@ -255,9 +282,10 @@ export default function AcoesPage() {
               userNivelAcesso={userNivelAcesso}
               editandoAcao={editandoAcao}
               titulo={editandoAcao ? 'Editar Ação' : 'Nova Ação'}
-              onSave={() => {
+              onSave={(msg?: string) => {
                 setEditandoAcao(null)
                 fetchAcoes()
+                showToast(msg || 'Ação salva!')
               }}
               onCancel={resetForm}
             />
@@ -306,6 +334,36 @@ export default function AcoesPage() {
         )}
       </div>
     </div>
+
+      {/* Modal de Exclusão com Confirmação */}
+      {modalExcluir && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4" onClick={() => setModalExcluir(null)}>
+          <div className="bg-white rounded-xl max-w-sm w-full p-8 text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-red-600 mb-4">
+              <AlertCircle size={56} className="mx-auto" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-3">Excluir Ação</h3>
+            <p className="text-base text-gray-600 mb-8">Tem certeza que deseja excluir esta ação?</p>
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => setModalExcluir(null)} className="px-5 py-3 text-sm font-bold text-amber-700 bg-amber-50 border-2 border-amber-300 rounded-xl hover:bg-amber-100 transition">
+                Cancelar exclusão
+              </button>
+              <button
+                disabled={excluirCountdown > 0}
+                onClick={confirmDelete}
+                className={`px-5 py-3 text-sm font-bold text-white rounded-xl transition ${
+                  excluirCountdown > 0
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                {excluirCountdown > 0 ? `Aguarde ${excluirCountdown}s` : 'Sim, excluir ação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -414,14 +472,16 @@ const AcaoCard = ({ acao, setores, tiposAcoes, usuarios, onEdit, onDelete }: any
           </div>
         </div>
         
-        <div className="flex gap-2 ml-4">
-          <button onClick={() => onEdit(acao)} className="p-2 text-gray-500 hover:text-purple-600 rounded-lg transition" title="Editar">
-            <Pencil size={18} />
-          </button>
-          <button onClick={() => onDelete(acao.id)} className="p-2 text-gray-500 hover:text-red-600 rounded-lg transition" title="Excluir">
-            <Trash2 size={18} />
-          </button>
-        </div>
+          <div className="flex gap-2 ml-4">
+            {acao.status !== 'Cancelada' && (
+              <button onClick={() => onEdit(acao)} className="p-2 text-gray-500 hover:text-purple-600 rounded-lg transition" title="Editar">
+                <Pencil size={18} />
+              </button>
+            )}
+            <button onClick={() => onDelete(acao.id, acao.status)} className="p-2 text-gray-500 hover:text-red-600 rounded-lg transition" title="Excluir">
+              <Trash2 size={18} />
+            </button>
+          </div>
       </div>
     </div>
   )

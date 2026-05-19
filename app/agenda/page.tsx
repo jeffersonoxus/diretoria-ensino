@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import FormNovaAcao from '@/components/FormNovaAcao'
 import type { TipoAcao } from '@/components/FormNovaAcao'
+import { showToast } from '@/components/ui/Toast'
 
 export default function AgendaPage() {
   const supabase = createClient()
@@ -78,6 +79,16 @@ export default function AgendaPage() {
   const [modalCancelar, setModalCancelar] = useState<any>(null)
   const [cancelMotivo, setCancelMotivo] = useState('transporte')
   const [cancelOutroTexto, setCancelOutroTexto] = useState('')
+  const [modalExcluir, setModalExcluir] = useState<any>(null)
+  const [excluirCountdown, setExcluirCountdown] = useState(10)
+
+  // Countdown para exclusão
+  useEffect(() => {
+    if (modalExcluir && excluirCountdown > 0) {
+      const timer = setTimeout(() => setExcluirCountdown(excluirCountdown - 1), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [modalExcluir, excluirCountdown])
 
   // ===== FUNÇÃO DE LOGOUT =====
   const handleLogout = async () => {
@@ -1311,7 +1322,7 @@ export default function AgendaPage() {
                       }}
                       className="text-purple-600 hover:text-purple-800 transition flex items-center gap-1 text-sm font-medium"
                     >
-                      <ExternalLink size={16} /> Editar
+                      <ExternalLink size={16} /> Editar Ação
                     </button>
                     {'Pendente|Realizada|Realizada Parcialmente|Reagendada'.split('|').includes(modalAcao.status) && (
                       <button
@@ -1322,7 +1333,21 @@ export default function AgendaPage() {
                         }}
                         className="text-red-600 hover:text-red-800 transition flex items-center gap-1 text-sm font-medium"
                       >
-                        Cancelar
+                        Cancelar Ação
+                      </button>
+                    )}
+                    {/* Excluir Ação — apenas admin */}
+                    {(userNivelAcesso === 'gerencial' || userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo') && (
+                      <button
+                        onClick={() => {
+                          const id = modalAcao.id
+                          setModalAcao(null)
+                          setModalExcluir(id)
+                          setExcluirCountdown(10)
+                        }}
+                        className="text-red-700 hover:text-red-900 transition flex items-center gap-1 text-sm font-bold border border-red-300 px-2 py-1 rounded-lg"
+                      >
+                        Excluir Ação
                       </button>
                     )}
                   </>
@@ -1379,12 +1404,66 @@ export default function AgendaPage() {
             <div className="flex gap-3 justify-end">
               <button onClick={() => setModalCancelar(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border rounded-lg">Voltar</button>
               <button onClick={async () => {
-                const motivo = cancelMotivo === 'outro' ? cancelOutroTexto.trim() || 'Outro' : cancelMotivo
-                await supabase.from('acoes').update({ status: 'Cancelada', cancelamento_motivo: motivo, updated_by: userPerfilId, updated_at: new Date().toISOString() }).eq('id', modalCancelar.id)
-                setModalCancelar(null)
-                setModalAcao(null)
-                carregarDados()
+                try {
+                  const motivo = cancelMotivo === 'outro' ? cancelOutroTexto.trim() || 'Outro' : cancelMotivo
+                  const payload: Record<string, any> = { status: 'Cancelada', updated_by: userPerfilId, updated_at: new Date().toISOString() }
+                  if (motivo) payload.cancelamento_motivo = motivo
+                  const { error } = await supabase.from('acoes').update(payload).eq('id', modalCancelar.id)
+                  if (error) {
+                    showToast('Erro ao cancelar: ' + error.message, 'error')
+                    return
+                  }
+                  const motivoLabel = motivo === 'transporte' ? 'Falta de transporte' : motivo === 'demandas' ? 'Demandas espontâneas' : motivo
+                  setModalCancelar(null)
+                  setModalAcao(null)
+                  carregarDados()
+                  showToast(`Ação cancelada: ${motivoLabel}`)
+                } catch (err: any) {
+                  showToast('Erro ao cancelar: ' + (err.message || 'Erro desconhecido'), 'error')
+                }
               }} className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700">Confirmar Cancelamento</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Exclusão com Confirmação */}
+      {modalExcluir && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4" onClick={() => setModalExcluir(null)}>
+          <div className="bg-white rounded-xl max-w-lg w-full p-8 text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-red-600 mb-4">
+              <AlertCircle size={56} className="mx-auto" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-3">Excluir Ação</h3>
+            <p className="text-lg text-gray-600 font-medium mb-8">Tem certeza que deseja excluir esta ação?</p>
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => setModalExcluir(null)} className="px-5 py-3 uppercase text-sm font-bold text-amber-700 bg-amber-50 border-2 border-amber-300 rounded-xl hover:bg-amber-100 transition">
+                Cancelar exclusão
+              </button>
+              <button
+                disabled={excluirCountdown > 0}
+                onClick={async () => {
+                  try {
+                    const { error } = await supabase.from('acoes').delete().eq('id', modalExcluir)
+                    if (error) {
+                      showToast('Erro ao excluir: ' + error.message, 'error')
+                      return
+                    }
+                    setModalExcluir(null)
+                    carregarDados()
+                    showToast('Ação excluída com sucesso!')
+                  } catch (err: any) {
+                    showToast('Erro ao excluir: ' + (err.message || 'Erro desconhecido'), 'error')
+                  }
+                }}
+                className={`px-5 py-3 text-sm font-bold uppercase text-white rounded-xl transition ${
+                  excluirCountdown > 0
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                {excluirCountdown > 0 ? `Aguarde ${excluirCountdown}s` : 'Sim, excluir ação'}
+              </button>
             </div>
           </div>
         </div>
@@ -1403,9 +1482,10 @@ export default function AgendaPage() {
           defaultDataInicio={modalNovaAcao ? formatarDataParaPreenchimento(modalNovaAcao.dia, modalNovaAcao.turno) : undefined}
           defaultDataFim={modalNovaAcao ? formatarDataParaPreenchimentoData(modalNovaAcao.dia) : undefined}
           defaultSetorId={userSetoresIds.length === 1 ? userSetoresIds[0] : undefined}
-          onSave={() => {
+          onSave={(mensagem?: string) => {
             setModalNovaAcao(null)
             carregarDados()
+            showToast(mensagem || 'Ação criada com sucesso!')
           }}
           onCancel={() => setModalNovaAcao(null)}
         />

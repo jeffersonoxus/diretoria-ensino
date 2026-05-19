@@ -271,7 +271,7 @@ export default function PlanosPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Planos de Ação</h1>
@@ -287,10 +287,6 @@ export default function PlanosPage() {
             <Plus size={18} /> Novo Plano
           </button>
         )}
-      </div>
-
-      <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
-        Apenas pessoas do setor do plano ou com n&iacute;vel gerencial/administrativo podem editar ou excluir planos.
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -412,7 +408,11 @@ export default function PlanosPage() {
           const editavel = podeEditarPlano(plano)
 
           return (
-            <div key={plano.id} className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+            <div key={plano.id} className={`rounded-2xl border overflow-hidden transition ${
+              plano.setor_id && userSetoresIds.includes(plano.setor_id) && !podeEditarGlobal
+                ? 'bg-white border-l-[6px] border-l-purple-700 border-gray-300 shadow-xl hover:shadow-2xl ring-1 ring-purple-200'
+                : 'bg-white border-gray-200 shadow-md hover:shadow-lg'
+            }`}>
               <div
                 onClick={() => setPlanoExpandido(isExpanded ? null : plano.id)}
                 className="p-5 cursor-pointer hover:bg-gray-50 transition flex items-start justify-between"
@@ -420,6 +420,11 @@ export default function PlanosPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <h3 className="font-bold text-gray-800">{plano.titulo}</h3>
+                    {editavel && plano.setor_id && userSetoresIds.includes(plano.setor_id) && !podeEditarGlobal && (
+                      <span className="text-[11px] px-2.5 py-1 rounded-full bg-purple-700 text-white font-bold shadow-sm">
+                        Meu setor
+                      </span>
+                    )}
                     <span className={`text-xs px-2 py-0.5 rounded-full border ${prioridadeConf.color}`}>
                       {prioridadeConf.label}
                     </span>
@@ -529,6 +534,8 @@ export default function PlanosPage() {
           setores={setores}
           userPerfilId={userPerfilId}
           userNome={userNome}
+          userSetoresIds={userSetoresIds}
+          podeEditarGlobal={podeEditarGlobal}
           editandoPlano={editandoPlano ? {
             id: editandoPlano.id,
             titulo: editandoPlano.titulo,

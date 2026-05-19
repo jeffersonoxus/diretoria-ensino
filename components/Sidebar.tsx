@@ -19,7 +19,8 @@ import {
   FileText,
   BarChart3,
   Users,
-  Target
+  Target,
+  Puzzle
 } from 'lucide-react';
 import { useSetorEJA } from '@/hooks/useSetorEJA'
 import { NIVEL_LABELS, NIVEL_COLORS, NIVEL_DOT_COLORS, type NivelAcesso } from '@/hooks/useNivelAcesso'
@@ -146,6 +147,7 @@ export const Sidebar = () => {
         { href: '/agenda/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
         { href: '/agenda/documentos', icon: FileText, label: 'Documentos', show: temSetor, badge: documentosPendentes },
         { href: '/agenda/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
+        { href: '/agenda/modelos', icon: Puzzle, label: 'Ações do Setor', show: true },
         { href: '/agenda/planos', icon: Target, label: 'Planos de Ação', show: true },
       ]
     }
@@ -165,6 +167,7 @@ export const Sidebar = () => {
       { href: '/agenda/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
       { href: '/agenda/documentos', icon: FileText, label: 'Documentos', show: true },
       { href: '/agenda/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
+      { href: '/agenda/modelos', icon: Puzzle, label: 'Ações do Setor', show: true },
       { href: '/agenda/planos', icon: Target, label: 'Planos de Ação', show: true },
     ]
   }

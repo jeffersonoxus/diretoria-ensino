@@ -189,7 +189,7 @@ interface FormNovaAcaoProps {
   defaultDataInicio?: string
   defaultDataFim?: string
   defaultSetorId?: string
-  onSave: () => void
+  onSave: (mensagem?: string) => void
   onCancel?: () => void
   titulo?: string
 }
@@ -426,7 +426,7 @@ export default function FormNovaAcao({
       pessoasFinal.push(nomeResponsavel)
     }
 
-    const dadosComuns = {
+    const dadosComuns: Record<string, any> = {
       descricao,
       pessoas: pessoasFinal,
       setores_envolvidos: setoresSelecionados,
@@ -437,9 +437,12 @@ export default function FormNovaAcao({
       data_fim: dataFim ? formatarDataParaBanco(dataFim) : null,
       necessita_transporte: necessitaTransporte,
       status,
-      cancelamento_motivo: status === 'Cancelada' ? (cancelamentoMotivo === 'outro' ? cancelamentoOutro.trim() || null : cancelamentoMotivo) : null,
       dados_extras: dadosExtras,
       observacoes
+    }
+
+    if (status === 'Cancelada') {
+      dadosComuns.cancelamento_motivo = cancelamentoMotivo === 'outro' ? cancelamentoOutro.trim() || null : cancelamentoMotivo
     }
 
     const { error } = editandoAcao
@@ -463,11 +466,9 @@ export default function FormNovaAcao({
       return
     }
 
-    setMensagemSucesso(editandoAcao ? "Ação atualizada com sucesso!" : "Ação criada com sucesso!")
-    setTimeout(() => setMensagemSucesso(null), 3000)
-
+    const msg = editandoAcao ? "Ação atualizada com sucesso!" : "Ação criada com sucesso!"
     resetForm()
-    onSave()
+    onSave(msg)
   }
 
   const tipoAcaoSelecionado = tiposAcoes.find(ta => ta.id === tipoAcaoId)

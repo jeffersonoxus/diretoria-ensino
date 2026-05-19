@@ -21,6 +21,8 @@ interface FormPlanoProps {
   setores: Setor[]
   userPerfilId: string
   userNome: string
+  userSetoresIds: string[]
+  podeEditarGlobal: boolean
   editandoPlano?: {
     id: string
     titulo: string
@@ -36,7 +38,7 @@ interface FormPlanoProps {
   onCancel: () => void
 }
 
-export default function FormPlano({ setores, userPerfilId, userNome, editandoPlano, onSave, onCancel }: FormPlanoProps) {
+export default function FormPlano({ setores, userPerfilId, userNome, userSetoresIds, podeEditarGlobal, editandoPlano, onSave, onCancel }: FormPlanoProps) {
   const supabase = createClient()
 
   const [titulo, setTitulo] = useState(editandoPlano?.titulo || '')
@@ -66,7 +68,11 @@ export default function FormPlano({ setores, userPerfilId, userNome, editandoPla
   }
 
   async function salvar() {
-    if (!titulo.trim()) return
+    if (!titulo.trim()) { setErro('Título é obrigatório'); setSalvando(false); return }
+    if (!descricao.trim()) { setErro('Descrição é obrigatória'); setSalvando(false); return }
+    if (!setorId) { setErro('Selecione um setor'); setSalvando(false); return }
+    if (!prazo) { setErro('Prazo é obrigatório'); setSalvando(false); return }
+    if (metas.length === 0) { setErro('Adicione pelo menos uma meta'); setSalvando(false); return }
     setSalvando(true)
     setErro(null)
 
@@ -206,28 +212,28 @@ export default function FormPlano({ setores, userPerfilId, userNome, editandoPla
         <div className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
-              <input type="text" value={titulo} onChange={(e) => setTitulo(e.target.value)}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Título <span className="text-red-500">*</span></label>
+              <input type="text" value={titulo} onChange={(e) => setTitulo(e.target.value)} required
                 className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition" placeholder="Ex: Melhoria do IDEB" />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
-              <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Descrição <span className="text-red-500">*</span></label>
+              <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} required
                 className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition" placeholder="Descreva o plano..." />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Setor</label>
-              <select value={setorId} onChange={(e) => setSetorId(e.target.value)}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Setor <span className="text-red-500">*</span></label>
+              <select value={setorId} onChange={(e) => setSetorId(e.target.value)} required
                 className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition">
-                <option value="">Nenhum</option>
-                {setores.map(s => (
+                <option value="">Selecione um setor</option>
+                {setores.filter(s => podeEditarGlobal || userSetoresIds.includes(s.id)).map(s => (
                   <option key={s.id} value={s.id}>{s.nome}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Prazo</label>
-              <input type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Prazo <span className="text-red-500">*</span></label>
+              <input type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)} required
                 className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition" />
             </div>
             <div>
@@ -248,7 +254,7 @@ export default function FormPlano({ setores, userPerfilId, userNome, editandoPla
 
           <div className="border-t pt-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-700">Metas do Plano</h3>
+              <h3 className="font-semibold text-gray-700">Metas do Plano <span className="text-red-500">*</span></h3>
               <button onClick={adicionarMeta}
                 className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-700">
                 <Plus size={16} /> Adicionar Meta

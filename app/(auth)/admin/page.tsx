@@ -2,6 +2,7 @@
 'use client'
 
 import { useState, useEffect } from "react"
+import { showToast } from '@/components/ui/Toast'
 import { 
   Plus, 
   FolderTree, 
@@ -375,7 +376,34 @@ export default function AdminPage() {
                   <button onClick={() => handleDeleteSetor(setor.id)} className="text-red-600 hover:bg-red-50 p-1.5 rounded-lg"><Trash2 size={14} /></button>
                 </div>
               </div>
-              <h3 className="font-black text-slate-900 mb-1">{setor.nome}</h3>
+              <h3 className="font-black text-slate-900 mb-1 flex items-center gap-2">
+                {setor.nome}
+                {isSuperAdmin && (
+                  <button
+                    onClick={async () => {
+                      const novoValor = !(setor as any).pode_criar_modelos
+                      const { error } = await supabase.from('setores').update({ pode_criar_modelos: novoValor }).eq('id', setor.id)
+                      if (!error) {
+                        setSetores(prev => prev.map(s => s.id === setor.id ? { ...s, pode_criar_modelos: novoValor } : s))
+                      } else {
+                        if (error.message?.includes('pode_criar_modelos')) {
+                          showToast('Coluna pode_criar_modelos não existe no banco. Execute: ALTER TABLE setores ADD COLUMN pode_criar_modelos BOOLEAN DEFAULT false;', 'error')
+                        } else {
+                          showToast('Erro: ' + error.message, 'error')
+                        }
+                      }
+                    }}
+                    className={`text-[11px] px-3 py-1 rounded-full font-bold border-2 transition ${
+                      (setor as any).pode_criar_modelos
+                        ? 'bg-green-100 text-green-800 border-green-500 hover:bg-green-200 shadow-sm shadow-green-200'
+                        : 'bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-200'
+                    }`}
+                    title="Clique para alternar permissão de criar modelos de ação"
+                  >
+                    Criar modelo de ação: {(setor as any).pode_criar_modelos ? 'ON' : 'OFF'}
+                  </button>
+                )}
+              </h3>
               <p className="text-xs text-slate-500 mb-3 line-clamp-1">{setor.descricao || 'Sem descrição'}</p>
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase mb-2">
                 <Users size={12}/> {setor.pessoas?.length || 0} Membros
