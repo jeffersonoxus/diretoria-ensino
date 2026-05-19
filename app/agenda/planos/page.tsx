@@ -312,7 +312,7 @@ export default function PlanosPage() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-3 gap-6 text-slate-600">
         <div className="bg-white rounded-2xl shadow-sm border p-6">
           <h3 className="font-semibold text-gray-800 mb-4">Por Status</h3>
           <ResponsiveContainer width="100%" height={220}>
@@ -333,7 +333,7 @@ export default function PlanosPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border p-6">
+        <div className="bg-white rounded-2xl shadow-sm border p-6 text-slate-600">
           <h3 className="font-semibold text-gray-800 mb-4">Por Prioridade</h3>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>

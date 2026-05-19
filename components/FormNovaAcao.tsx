@@ -36,6 +36,7 @@ export interface Acao {
   status?: string
   dados_extras?: Record<string, any>
   observacoes?: string
+  cancelamento_motivo?: string
   created_by_nome?: string
   updated_by_nome?: string
 }
@@ -221,6 +222,8 @@ export default function FormNovaAcao({
   const [dataFim, setDataFim] = useState('')
   const [necessitaTransporte, setNecessitaTransporte] = useState(false)
   const [status, setStatus] = useState('Pendente')
+  const [cancelamentoMotivo, setCancelamentoMotivo] = useState('transporte')
+  const [cancelamentoOutro, setCancelamentoOutro] = useState('')
   const [dadosExtras, setDadosExtras] = useState<Record<string, any>>({})
   const [observacoes, setObservacoes] = useState('')
   const [mostrarCamposPersonalizados, setMostrarCamposPersonalizados] = useState(false)
@@ -264,6 +267,13 @@ export default function FormNovaAcao({
       setDataFim(formatarDataParaExibicao(editandoAcao.data_fim || ''))
       setNecessitaTransporte(editandoAcao.necessita_transporte || false)
       setStatus(editandoAcao.status || 'Pendente')
+      const motivo = editandoAcao.cancelamento_motivo
+      if (motivo === 'transporte' || motivo === 'demandas') {
+        setCancelamentoMotivo(motivo)
+      } else if (motivo) {
+        setCancelamentoMotivo('outro')
+        setCancelamentoOutro(motivo)
+      }
       setDadosExtras(editandoAcao.dados_extras || {})
       setObservacoes(editandoAcao.observacoes || '')
       setMostrarCamposPersonalizados(true)
@@ -427,6 +437,7 @@ export default function FormNovaAcao({
       data_fim: dataFim ? formatarDataParaBanco(dataFim) : null,
       necessita_transporte: necessitaTransporte,
       status,
+      cancelamento_motivo: status === 'Cancelada' ? (cancelamentoMotivo === 'outro' ? cancelamentoOutro.trim() || null : cancelamentoMotivo) : null,
       dados_extras: dadosExtras,
       observacoes
     }
@@ -480,7 +491,7 @@ export default function FormNovaAcao({
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold text-gray-800">{titulo}</h2>
           {editandoAcao && onCancel && (
-            <button onClick={onCancel} className="text-gray-500 hover:text-gray-700">Cancelar edição</button>
+            <button onClick={onCancel} className="text-gray-700 hover:text-gray-700">Cancelar edição</button>
           )}
         </div>
       )}
@@ -610,7 +621,7 @@ export default function FormNovaAcao({
                   </select>
                   <div className="flex items-center gap-1 mt-1">
                     <span className={`inline-block w-2.5 h-2.5 rounded-full ${status === 'Pendente' ? 'bg-yellow-500' : status === 'Realizada' ? 'bg-green-500' : status === 'Realizada Parcialmente' ? 'bg-blue-500' : status === 'Cancelada' ? 'bg-red-500' : status === 'Reagendada' ? 'bg-purple-500' : 'bg-gray-300'}`}></span>
-                    <span className={`text-xs font-medium ${status === 'Pendente' ? 'text-yellow-600' : status === 'Realizada' ? 'text-green-600' : status === 'Realizada Parcialmente' ? 'text-blue-600' : status === 'Cancelada' ? 'text-red-600' : status === 'Reagendada' ? 'text-purple-600' : 'text-gray-500'}`}>{status}</span>
+                    <span className={`text-xs font-medium ${status === 'Pendente' ? 'text-yellow-600' : status === 'Realizada' ? 'text-green-600' : status === 'Realizada Parcialmente' ? 'text-blue-600' : status === 'Cancelada' ? 'text-red-600' : status === 'Reagendada' ? 'text-purple-600' : 'text-gray-700'}`}>{status}</span>
                   </div>
                 </div>
                 <div>
@@ -621,7 +632,7 @@ export default function FormNovaAcao({
                     className={`w-full flex items-center justify-center gap-3 p-3 rounded-xl border-2 font-bold text-base transition-all ${
                       necessitaTransporte
                         ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-200 scale-[1.02]'
-                        : 'border-gray-300 bg-white text-gray-500 hover:border-blue-300 hover:text-blue-500'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:text-blue-500'
                     }`}
                   >
                     <Bus size={22} className={necessitaTransporte ? 'text-white' : ''} />
@@ -629,6 +640,26 @@ export default function FormNovaAcao({
                   </button>
                 </div>
               </div>
+              {status === 'Cancelada' && (
+                <div className="p-4 border-2 border-red-200 bg-red-50 rounded-xl">
+                  <label className="block text-base font-bold text-red-700 mb-3">Motivo do Cancelamento</label>
+                  <label className={`flex items-center gap-3 p-3 rounded-lg border mb-2 cursor-pointer ${cancelamentoMotivo === 'transporte' ? 'border-red-500 bg-red-100' : 'border-gray-200 bg-white'}`}>
+                    <input type="radio" name="cancelMotivo" value="transporte" checked={cancelamentoMotivo === 'transporte'} onChange={() => setCancelamentoMotivo('transporte')} className="accent-red-600" />
+                    <div><p className="font-medium text-gray-800">Falta de transporte disponível</p><p className="text-xs text-gray-500">Cancelamento por indisponibilidade de veículo</p></div>
+                  </label>
+                  <label className={`flex items-center gap-3 p-3 rounded-lg border mb-2 cursor-pointer ${cancelamentoMotivo === 'demandas' ? 'border-red-500 bg-red-100' : 'border-gray-200 bg-white'}`}>
+                    <input type="radio" name="cancelMotivo" value="demandas" checked={cancelamentoMotivo === 'demandas'} onChange={() => setCancelamentoMotivo('demandas')} className="accent-red-600" />
+                    <div><p className="font-medium text-gray-800">Demandas espontâneas</p><p className="text-xs text-gray-500">Ação cancelada por demandas imprevistas</p></div>
+                  </label>
+                  <label className={`flex items-center gap-3 p-3 rounded-lg border mb-2 cursor-pointer ${cancelamentoMotivo === 'outro' ? 'border-red-500 bg-red-100' : 'border-gray-200 bg-white'}`}>
+                    <input type="radio" name="cancelMotivo" value="outro" checked={cancelamentoMotivo === 'outro'} onChange={() => setCancelamentoMotivo('outro')} className="accent-red-600" />
+                    <p className="font-medium text-gray-800">Outro motivo</p>
+                  </label>
+                  {cancelamentoMotivo === 'outro' && (
+                    <input type="text" value={cancelamentoOutro} onChange={e => setCancelamentoOutro(e.target.value)} placeholder="Especifique o motivo..." className="w-full p-2 border rounded-lg text-sm bg-white" autoFocus />
+                  )}
+                </div>
+              )}
               <div>
                 <label className="block text-base font-bold text-gray-700 mb-2">Observações</label>
                 <textarea
@@ -648,7 +679,7 @@ export default function FormNovaAcao({
               <span className="w-1.5 h-5 bg-pink-500 rounded-full inline-block" />
               Setores Envolvidos
             </h3>
-            <p className="text-sm text-gray-500 mb-3">Clique nos setores para adicionar/remover automaticamente suas pessoas nos participantes.</p>
+            <p className="text-sm text-gray-700 mb-3">Clique nos setores para adicionar/remover automaticamente suas pessoas nos participantes.</p>
             <div className="flex flex-wrap gap-2">
               {todosSetoresParaEnvolver.map(setor => (
                 <button
@@ -702,10 +733,10 @@ export default function FormNovaAcao({
                       )
                     })
                   ) : (
-                    <p className="text-gray-500 text-sm p-2">Nenhuma pessoa encontrada</p>
+                    <p className="text-gray-700 text-sm p-2">Nenhuma pessoa encontrada</p>
                   )}
                 </div>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-gray-700 mt-1">
                   ⭐ Você é o responsável e não pode ser removido.
                 </p>
               </div>

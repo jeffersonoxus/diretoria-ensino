@@ -8,7 +8,7 @@ import {
   Calendar, CheckCircle, AlertCircle, TrendingUp, Users, Building2, 
   Sunrise, Sun, Moon, Package, Filter, X, ChevronDown, ChevronUp, 
   MapPin, Clock, Settings, Eye, Car, Printer, Download, PlusCircle,
-  User, CalendarDays, School, List, LogOut, Plus
+  User, CalendarDays, School, List, LogOut, Plus, ExternalLink
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
@@ -75,6 +75,9 @@ export default function AgendaPage() {
   const [expandirGraficosExtras, setExpandirGraficosExtras] = useState(false)
   const [modalAcao, setModalAcao] = useState<any>(null)
   const [modalNovaAcao, setModalNovaAcao] = useState<{ dia: Date; turno: string } | null>(null)
+  const [modalCancelar, setModalCancelar] = useState<any>(null)
+  const [cancelMotivo, setCancelMotivo] = useState('transporte')
+  const [cancelOutroTexto, setCancelOutroTexto] = useState('')
 
   // ===== FUNÇÃO DE LOGOUT =====
   const handleLogout = async () => {
@@ -664,6 +667,15 @@ export default function AgendaPage() {
     return Object.values(statusMap).filter(d => d.value > 0)
   }, [acoesFiltradas])
 
+  const dadosCancelamento = useMemo(() => {
+    const motivos: Record<string, number> = {}
+    acoesFiltradas.filter(a => a.status === 'Cancelada' && a.cancelamento_motivo).forEach(a => {
+      const chave = a.cancelamento_motivo === 'transporte' ? 'Falta de transporte' : a.cancelamento_motivo === 'demandas' ? 'Demandas espontâneas' : a.cancelamento_motivo
+      motivos[chave] = (motivos[chave] || 0) + 1
+    })
+    return Object.entries(motivos).map(([name, value]) => ({ name, value }))
+  }, [acoesFiltradas])
+
   const dadosPorSetor = useMemo(() => {
     const setorMap: Record<string, { nome: string, total: number, realizadas: number, pendentes: number }> = {}
     acoesFiltradas.forEach(acao => {
@@ -839,10 +851,6 @@ export default function AgendaPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Agenda de Ações</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Visão geral das atividades • {userNome} • 
-            Setor(es): {setores.map(s => s.nome).join(', ')}
-          </p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => setMostrarImpressao(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition shadow-sm">
@@ -1169,7 +1177,7 @@ export default function AgendaPage() {
                   className={`grid${turnoIndex > 0 ? ' border-t border-gray-400/60' : ''}`}
                   style={{ gridTemplateColumns: `90px repeat(7, 1fr)` }}
                 >
-                  <div className={`p-3 flex items-center justify-center gap-2 text-sm font-medium border-b-2 border-gray-400 ${bgColor}`}>
+                  <div className={`p-3 flex items-center justify-center gap-2 text-sm font-medium border-b-2 border-r-2 border-gray-400 ${bgColor}`}>
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${turno === 'Manhã' ? 'bg-blue-100 text-blue-600' : turno === 'Tarde' ? 'bg-orange-100 text-orange-600' : 'bg-slate-200 text-slate-700'}`}>
                       {turno === 'Manhã' && <Sun size={16} />}{turno === 'Tarde' && <Sun size={16} />}{turno === 'Noite' && <Moon size={16} />}
                     </div>
@@ -1222,6 +1230,32 @@ export default function AgendaPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><CheckCircle size={20} className="text-purple-600" /> Status das Ações</h2><ResponsiveContainer width="100%" height={300}><PieChart><Pie data={dadosStatus} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent = 0 }) => `${name}: ${(percent * 100).toFixed(0)}%`}>{dadosStatus.map((entry, index) => <Cell key={index} fill={entry.color} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div>
 
+        {dadosCancelamento.length > 0 && (
+          <div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><AlertCircle size={20} className="text-red-500" /> Motivos de Cancelamento</h2>
+            <div className="space-y-3">
+              {dadosCancelamento.map((item, i) => {
+                const total = dadosCancelamento.reduce((s, d) => s + d.value, 0)
+                const pct = total > 0 ? ((item.value / total) * 100).toFixed(0) : 0
+                const icon = item.name === 'Falta de transporte' ? '🚌' : item.name === 'Demandas espontâneas' ? '📋' : '📝'
+                return (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="text-lg">{icon}</span>
+                    <div className="flex-1">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="font-medium text-gray-700">{item.name}</span>
+                        <span className="text-gray-500">{item.value} ({pct}%)</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-2">
+                        <div className="bg-red-500 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {dadosPorTurno.length > 0 && (<div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Clock size={20} className="text-orange-500" /> Ações por Turno</h2><ResponsiveContainer width="100%" height={300}><PieChart><Pie data={dadosPorTurno} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>{dadosPorTurno.map((entry, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div>)}
 
         {dadosPorTipoAcao.length > 0 && (<div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><List size={20} className="text-cyan-500" /> Ações por Tipo</h2><ResponsiveContainer width="100%" height={300}><BarChart data={dadosPorTipoAcao} layout="vertical" margin={{ left: 80 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis type="category" dataKey="name" width={100} /><Tooltip /><Bar dataKey="value" fill="#06b6d4" name="Quantidade" /></BarChart></ResponsiveContainer></div>)}
@@ -1262,16 +1296,44 @@ export default function AgendaPage() {
 
       {/* Modal de Detalhes da Ação */}
       {modalAcao && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setModalAcao(null)}>
+        <div className="fixed inset-0 bg-black/50 flex text-slate-600 items-center justify-center z-50 p-4" onClick={() => setModalAcao(null)}>
           <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
               <h2 className="text-xl font-bold text-gray-800">Detalhes da Ação</h2>
-              <button onClick={() => setModalAcao(null)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+              <div className="flex items-center gap-3">
+                {(userSetoresIds.includes(modalAcao.setor_id) || (userNivelAcesso && userNivelAcesso !== 'tecnico')) && (
+                  <>
+                    <button
+                      onClick={() => {
+                        const id = modalAcao.id
+                        setModalAcao(null)
+                        router.push(`/agenda/acoes?editarAcaoId=${id}`)
+                      }}
+                      className="text-purple-600 hover:text-purple-800 transition flex items-center gap-1 text-sm font-medium"
+                    >
+                      <ExternalLink size={16} /> Editar
+                    </button>
+                    {'Pendente|Realizada|Realizada Parcialmente|Reagendada'.split('|').includes(modalAcao.status) && (
+                      <button
+                        onClick={() => {
+                          setModalCancelar(modalAcao)
+                          setCancelMotivo('transporte')
+                          setCancelOutroTexto('')
+                        }}
+                        className="text-red-600 hover:text-red-800 transition flex items-center gap-1 text-sm font-medium"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </>
+                )}
+                <button onClick={() => setModalAcao(null)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+              </div>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-sm text-gray-400 uppercase">Tipo</label><p className="font-medium">{tiposAcoes.find(t => t.id === modalAcao.tipo_acao_id)?.nome || 'N/A'}</p></div>
-                <div><label className="text-sm text-gray-400 uppercase">Status</label><p className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${modalAcao.status === 'Realizada' ? 'bg-green-100 text-green-700' : modalAcao.status === 'Cancelada' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{modalAcao.status || 'Pendente'}</p></div>
+                <div><label className="text-sm text-gray-400 uppercase">Status</label><p className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${modalAcao.status === 'Realizada' ? 'bg-green-100 text-green-700' : modalAcao.status === 'Cancelada' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{modalAcao.status || 'Pendente'}</p>{modalAcao.status === 'Cancelada' && modalAcao.cancelamento_motivo && <p className="text-xs text-red-600 mt-1">Motivo: {modalAcao.cancelamento_motivo === 'transporte' ? 'Falta de transporte disponível' : modalAcao.cancelamento_motivo === 'demandas' ? 'Demandas espontâneas' : modalAcao.cancelamento_motivo}</p>}</div>
                 <div><label className="text-sm text-gray-400 uppercase">Setor</label><p>{setores.find(s => s.id === modalAcao.setor_id)?.nome || 'N/I'}</p></div>
                 <div><label className="text-sm text-gray-400 uppercase">Data/Hora</label><p>{modalAcao.data_inicio ? new Date(modalAcao.data_inicio).toLocaleString('pt-BR') : 'N/A'}</p></div>
                 <div><label className="text-sm text-gray-400 uppercase">Local</label><p>{modalAcao.local || 'Não informado'}</p></div>
@@ -1284,6 +1346,45 @@ export default function AgendaPage() {
                 <div><label className="text-sm text-gray-400 uppercase">Atualizado por</label><p>{getUsuarioNome(modalAcao.updated_by)}</p></div>
                 <div><label className="text-sm text-gray-400 uppercase">Atualizado em</label><p>{modalAcao.updated_at ? new Date(modalAcao.updated_at).toLocaleString('pt-BR') : 'N/A'}</p></div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Cancelamento */}
+      {modalCancelar && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => setModalCancelar(null)}>
+          <div className="bg-white rounded-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-4">Cancelar Ação</h3>
+            <p className="text-sm text-gray-600 mb-4">Selecione o motivo do cancelamento:</p>
+            
+            <label className={`flex items-center gap-3 p-3 rounded-lg border mb-2 cursor-pointer ${cancelMotivo === 'transporte' ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
+              <input type="radio" name="motivo" value="transporte" checked={cancelMotivo === 'transporte'} onChange={() => setCancelMotivo('transporte')} className="accent-red-600" />
+              <div><p className="font-medium text-gray-800">Falta de transporte disponível</p><p className="text-xs text-gray-500">Cancelamento por indisponibilidade de veículo</p></div>
+            </label>
+            
+            <label className={`flex items-center gap-3 p-3 rounded-lg border mb-2 cursor-pointer ${cancelMotivo === 'demandas' ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
+              <input type="radio" name="motivo" value="demandas" checked={cancelMotivo === 'demandas'} onChange={() => setCancelMotivo('demandas')} className="accent-red-600" />
+              <div><p className="font-medium text-gray-800">Demandas espontâneas</p><p className="text-xs text-gray-500">Ação cancelada por demandas imprevistas</p></div>
+            </label>
+            
+            <label className={`flex items-center gap-3 p-3 rounded-lg border mb-2 cursor-pointer ${cancelMotivo === 'outro' ? 'border-red-500 bg-red-50' : 'border-gray-200'}`}>
+              <input type="radio" name="motivo" value="outro" checked={cancelMotivo === 'outro'} onChange={() => setCancelMotivo('outro')} className="accent-red-600" />
+              <p className="font-medium text-gray-800">Outro motivo</p>
+            </label>
+            {cancelMotivo === 'outro' && (
+              <input type="text" value={cancelOutroTexto} onChange={e => setCancelOutroTexto(e.target.value)} placeholder="Especifique o motivo..." className="w-full mb-4 p-2 border rounded-lg text-sm" autoFocus />
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setModalCancelar(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border rounded-lg">Voltar</button>
+              <button onClick={async () => {
+                const motivo = cancelMotivo === 'outro' ? cancelOutroTexto.trim() || 'Outro' : cancelMotivo
+                await supabase.from('acoes').update({ status: 'Cancelada', cancelamento_motivo: motivo, updated_by: userPerfilId, updated_at: new Date().toISOString() }).eq('id', modalCancelar.id)
+                setModalCancelar(null)
+                setModalAcao(null)
+                carregarDados()
+              }} className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700">Confirmar Cancelamento</button>
             </div>
           </div>
         </div>

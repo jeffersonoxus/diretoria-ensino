@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { 
   Pencil, Trash2, Calendar, MapPin, Truck, Users, 
@@ -27,6 +28,7 @@ interface Local {
 
 export default function AcoesPage() {
   const supabase = createClient()
+  const searchParams = useSearchParams()
   const [acoes, setAcoes] = useState<Acao[]>([])
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [setores, setSetores] = useState<Setor[]>([])
@@ -63,6 +65,17 @@ export default function AcoesPage() {
       carregarTodosUsuarios()
     }
   }, [userPerfilId, userSetoresIds, userNivelAcesso])
+
+  // Auto-carregar edição vindo do link da agenda
+  useEffect(() => {
+    const acaoId = searchParams.get('editarAcaoId')
+    if (acaoId && acoes.length > 0) {
+      const acao = acoes.find(a => a.id === acaoId)
+      if (acao) {
+        carregarParaEdicao(acao)
+      }
+    }
+  }, [searchParams, acoes])
 
   useEffect(() => {
     const now = new Date()
