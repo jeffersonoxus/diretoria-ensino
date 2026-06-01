@@ -247,27 +247,37 @@ export default function ModelosPage() {
                     <p className="text-sm text-gray-400 italic">Nenhum campo extra.</p>
                   )}
                   {editandoExtras.map((campo) => (
-                    <div key={campo.id} className="flex gap-2 items-start bg-gray-50 p-3 rounded-xl border">
-                      <input
-                        className="flex-1 bg-white border rounded-lg p-2 text-sm font-medium outline-none focus:ring-1 ring-purple-500"
-                        placeholder="Nome do campo"
-                        value={campo.label}
-                        onChange={(e) => setEditandoExtras(editandoExtras.map(ex => ex.id === campo.id ? { ...ex, label: e.target.value } : ex))}
-                      />
-                      <select
-                        className="bg-white border rounded-lg p-2 text-xs font-medium outline-none"
-                        value={campo.tipo}
-                        onChange={(e) => setEditandoExtras(editandoExtras.map(ex => ex.id === campo.id ? { ...ex, tipo: e.target.value as any } : ex))}
-                      >
-                        <option value="text">Texto</option>
-                        <option value="number">Número</option>
-                        <option value="boolean">Sim/Não</option>
-                        <option value="select">Seleção</option>
-                        <option value="multiselect">Multi Seleção</option>
-                      </select>
-                      <button type="button" onClick={() => setEditandoExtras(editandoExtras.filter(ex => ex.id !== campo.id))} className="text-red-400 p-2 hover:text-red-600">
-                        <X size={16} />
-                      </button>
+                    <div key={campo.id} className="bg-white p-4 rounded-2xl border shadow-sm space-y-3">
+                      <div className="flex gap-2 items-start">
+                        <input
+                          className="flex-1 bg-slate-50 border-none p-2 rounded-lg text-sm font-bold outline-none focus:ring-1 ring-purple-500"
+                          placeholder="Nome do campo"
+                          value={campo.label}
+                          onChange={(e) => setEditandoExtras(editandoExtras.map(ex => ex.id === campo.id ? { ...ex, label: e.target.value } : ex))}
+                        />
+                        <select
+                          className="bg-slate-50 p-2 rounded-lg text-xs font-bold outline-none border-none focus:ring-1 ring-purple-500"
+                          value={campo.tipo}
+                          onChange={(e) => setEditandoExtras(editandoExtras.map(ex => ex.id === campo.id ? { ...ex, tipo: e.target.value as any } : ex))}
+                        >
+                          <option value="text">Texto</option>
+                          <option value="number">Número</option>
+                          <option value="boolean">Sim/Não</option>
+                          <option value="select">Seleção</option>
+                          <option value="multiselect">Multi Seleção</option>
+                        </select>
+                        <button type="button" onClick={() => setEditandoExtras(editandoExtras.filter(ex => ex.id !== campo.id))} className="text-red-400 p-2 hover:text-red-600">
+                          <X size={16} />
+                        </button>
+                      </div>
+                      {(campo.tipo === 'select' || campo.tipo === 'multiselect') && (
+                        <input
+                          className="w-full border-b text-xs p-1 outline-none font-medium"
+                          placeholder="Opções separadas por vírgula (ex: Opção A, Opção B, Opção C)"
+                          defaultValue={campo.opcoes?.join(', ') || ''}
+                          onChange={(e) => setEditandoExtras(editandoExtras.map(ex => ex.id === campo.id ? { ...ex, opcoes: e.target.value.split(',').map(s => s.trim()).filter(s => s) } : ex))}
+                        />
+                      )}
                     </div>
                   ))}
                 </div>

@@ -13,7 +13,6 @@ import {
   Menu, 
   X, 
   ShieldUser,
-  FileSpreadsheet,
   GraduationCap,
   ClipboardCheck,
   FileText,
@@ -146,7 +145,7 @@ export const Sidebar = () => {
         { href: '/agenda/indicadores', icon: BarChart3, label: 'Indicadores', show: temSetor },
         { href: '/agenda/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
         { href: '/agenda/documentos', icon: FileText, label: 'Documentos', show: temSetor, badge: documentosPendentes },
-        { href: '/agenda/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
+        { href: '/agenda/eja', icon: GraduationCap, label: 'EJA', show: isSetorEJA && !loadingSetorEJA },
         { href: '/agenda/modelos', icon: Puzzle, label: 'Ações do Setor', show: true },
         { href: '/agenda/planos', icon: Target, label: 'Planos de Ação', show: true },
       ]
@@ -166,7 +165,7 @@ export const Sidebar = () => {
       { href: '/agenda/indicadores', icon: BarChart3, label: 'Indicadores', show: true },
       { href: '/agenda/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
       { href: '/agenda/documentos', icon: FileText, label: 'Documentos', show: true },
-      { href: '/agenda/avaliacoes', icon: FileSpreadsheet, label: 'Avaliações', show: isSetorEJA && !loadingSetorEJA },
+      { href: '/agenda/eja', icon: GraduationCap, label: 'EJA', show: isSetorEJA && !loadingSetorEJA },
       { href: '/agenda/modelos', icon: Puzzle, label: 'Ações do Setor', show: true },
       { href: '/agenda/planos', icon: Target, label: 'Planos de Ação', show: true },
     ]

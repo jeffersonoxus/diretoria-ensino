@@ -810,6 +810,25 @@ function renderizarCampoExtra(param: ParametroExtra, dadosExtras: any, setDadosE
           {param.opcoes?.map(op => <option key={op} value={op}>{op}</option>)}
         </select>
       )
+    case 'multiselect': {
+      const selecionados: string[] = Array.isArray(valor) ? valor : []
+      const toggle = (op: string) => {
+        const novos = selecionados.includes(op)
+          ? selecionados.filter(v => v !== op)
+          : [...selecionados, op]
+        atualizar(novos)
+      }
+      return (
+        <div className="flex flex-wrap gap-2">
+          {param.opcoes?.map(op => (
+            <button key={op} type="button" onClick={() => toggle(op)}
+              className={`px-3 py-1.5 rounded-lg border text-sm transition ${selecionados.includes(op) ? 'bg-purple-600 text-white' : 'bg-white hover:bg-gray-50'}`}>
+              {op}
+            </button>
+          ))}
+        </div>
+      )
+    }
     default:
       return null
   }
