@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useSetorEJA } from '@/hooks/useSetorEJA'
-import { Plus, Pencil, Trash2, X, School, Search, Save, Building2, Hash } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, School, Search, Save, Building2, Hash, User } from 'lucide-react'
 
 const PERIODOS = ['1º período', '2º período', '3º período', '4º período', '5º período', '6º período', '7º período', '8º período']
 
@@ -17,6 +17,12 @@ interface Escola {
   created_at: string
 }
 
+interface ServidorLite {
+  id: string
+  nome: string
+  escola_ids: string[]
+}
+
 const emptyTurmas = () => Object.fromEntries(PERIODOS.map(p => [p, [] as string[]]))
 
 export default function EscolasPage() {
@@ -25,6 +31,7 @@ export default function EscolasPage() {
   const { isSetorEJA, loading: loadingPerm } = useSetorEJA()
 
   const [escolas, setEscolas] = useState<Escola[]>([])
+  const [coordenadores, setCoordenadores] = useState<ServidorLite[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
@@ -48,8 +55,12 @@ export default function EscolasPage() {
 
   async function fetchEscolas() {
     setLoading(true)
-    const { data } = await supabase.from('escolas_eja').select('*').order('nome')
-    if (data) setEscolas(data as unknown as Escola[])
+    const [escRes, coordRes] = await Promise.all([
+      supabase.from('escolas_eja').select('*').order('nome'),
+      supabase.from('eja_servidores').select('id, nome, escola_ids').eq('classificacao', 'Coordenador').eq('ativo', true).order('nome'),
+    ])
+    if (escRes.data) setEscolas(escRes.data as unknown as Escola[])
+    if (coordRes.data) setCoordenadores(coordRes.data as ServidorLite[])
     setLoading(false)
   }
 
@@ -243,6 +254,18 @@ export default function EscolasPage() {
                     {escola.ativa ? 'Ativa' : 'Inativa'}
                   </span>
                 </div>
+                {(() => {
+                  const coordNome = coordenadores
+                    .filter(c => (c.escola_ids || []).includes(escola.id))
+                    .map(c => c.nome)
+                    .join(', ')
+                  return coordNome ? (
+                    <div className="mt-2 text-sm text-purple-700 bg-purple-50 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                      <User size={14} />
+                      Coordenador(a): {coordNome}
+                    </div>
+                  ) : null
+                })()}
                 {Object.entries(escola.turmas || {}).filter(([, t]) => t.length > 0).length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1">
                     {Object.entries(escola.turmas || {})

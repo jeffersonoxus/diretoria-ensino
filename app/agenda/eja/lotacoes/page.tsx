@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useSetorEJA } from '@/hooks/useSetorEJA'
-import { Plus, Pencil, Trash2, Search, X, School, Briefcase, Building2, BookOpen, Clock, AlertCircle } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, X, School, Briefcase, Building2, BookOpen, AlertCircle, CheckSquare, Printer, Calendar } from 'lucide-react'
 import { showToast } from '@/components/ui/Toast'
+
+const SEMESTRES = ['2026.1', '2026.2']
 
 interface Servidor {
   id: string
@@ -13,6 +15,7 @@ interface Servidor {
   matricula: string
   funcao: string
   classificacao: string
+  escola_ids?: string[]
 }
 
 interface Escola {
@@ -30,6 +33,7 @@ interface Lotacao {
   carga_horaria: number | null
   funcao_na_lotacao: string | null
   regente: boolean
+  semestre: string
   created_at: string
   servidor: Servidor
   escola: { id: string; nome: string }
@@ -45,6 +49,7 @@ export default function LotacoesPage() {
   const [escolas, setEscolas] = useState<Escola[]>([])
   const [matriz, setMatriz] = useState<{ segmento: string; disciplina: string; ch_prevista: number | null }[]>([])
   const [loading, setLoading] = useState(true)
+  const [semestre, setSemestre] = useState('2026.1')
   const [searchTerm, setSearchTerm] = useState('')
   const [filtroEscola, setFiltroEscola] = useState('')
 
@@ -52,9 +57,8 @@ export default function LotacoesPage() {
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [formServidorId, setFormServidorId] = useState('')
   const [formEscolaId, setFormEscolaId] = useState('')
-  const [formTurmaId, setFormTurmaId] = useState('')
+  const [formTurmasIds, setFormTurmasIds] = useState<string[]>([])
   const [formDisciplina, setFormDisciplina] = useState('')
-  const [formCargaHoraria, setFormCargaHoraria] = useState('')
   const [formFuncao, setFormFuncao] = useState('')
   const [formRegente, setFormRegente] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -69,7 +73,7 @@ export default function LotacoesPage() {
   useEffect(() => {
     if (!isSetorEJA) return
     fetchData()
-  }, [isSetorEJA])
+  }, [isSetorEJA, semestre])
 
   const fetchData = async () => {
     setLoading(true)
@@ -77,10 +81,11 @@ export default function LotacoesPage() {
       supabase
         .from('eja_lotacoes')
         .select('*, servidor:eja_servidores(id, nome, matricula, funcao, classificacao), escola:escolas_eja(id, nome)')
+        .eq('semestre', semestre)
         .order('created_at', { ascending: false }),
       supabase
         .from('eja_servidores')
-        .select('id, nome, matricula, funcao, classificacao')
+        .select('id, nome, matricula, funcao, classificacao, escola_ids')
         .eq('ativo', true)
         .order('nome'),
       supabase
@@ -160,6 +165,26 @@ export default function LotacoesPage() {
     return 'border-gray-200 bg-gray-50 text-gray-600'
   }
 
+  const PERIOD_ORDER = ['1º período', '2º período', '3º período', '4º período', '5º período', '6º período', '7º período', '8º período']
+  const getPeriodoIndex = (p: string) => { const i = PERIOD_ORDER.indexOf(p); return i === -1 ? 999 : i }
+
+  const coordenadoresPorEscola = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const s of servidores) {
+      if (s.classificacao === 'Coordenador' && s.escola_ids) {
+        for (const eid of s.escola_ids) {
+          map.set(eid, s.nome)
+        }
+      }
+    }
+    return map
+  }, [servidores])
+
+  const getChPrevista = (disciplina: string, periodo: string | null): number | null => {
+    const found = getDisciplinasDaMatriz(periodo).find(d => d.disciplina === disciplina)
+    return found?.ch_prevista ?? null
+  }
+
   const lotacoesFiltradas = lotacoes.filter(lot => {
     if (filtroEscola && lot.escola_id !== filtroEscola) return false
     if (searchTerm) {
@@ -188,9 +213,8 @@ export default function LotacoesPage() {
     setEditandoId(null)
     setFormServidorId('')
     setFormEscolaId('')
-    setFormTurmaId('')
+    setFormTurmasIds([])
     setFormDisciplina('')
-    setFormCargaHoraria('')
     setFormFuncao('')
     setFormRegente(false)
   }
@@ -201,9 +225,8 @@ export default function LotacoesPage() {
     setEditandoId(lot.id)
     setFormServidorId(lot.servidor_id)
     setFormEscolaId(lot.escola_id)
-    setFormTurmaId(lot.turma_id || '')
+    setFormTurmasIds(lot.turma_id ? [lot.turma_id] : [])
     setFormDisciplina(lot.disciplina || '')
-    setFormCargaHoraria(lot.carga_horaria?.toString() || '')
     setFormFuncao(lot.funcao_na_lotacao || '')
     setFormRegente(lot.regente || false)
     setModalOpen(true)
@@ -214,25 +237,59 @@ export default function LotacoesPage() {
       showToast('Selecione servidor e escola', 'error')
       return
     }
+    if (!editandoId && formTurmasIds.length === 0) {
+      showToast('Selecione pelo menos uma turma', 'error')
+      return
+    }
     setSaving(true)
-    const payload = {
+    const basePayload = {
       servidor_id: formServidorId,
       escola_id: formEscolaId,
-      turma_id: formTurmaId || null,
+      semestre,
       disciplina: formRegente ? null : (formDisciplina || null),
-      carga_horaria: formCargaHoraria ? parseInt(formCargaHoraria) : null,
       funcao_na_lotacao: formFuncao || null,
       regente: formRegente,
     }
+
     try {
       if (editandoId) {
-        const { error } = await supabase.from('eja_lotacoes').update(payload).eq('id', editandoId)
+        const { error } = await supabase
+          .from('eja_lotacoes')
+          .update({ ...basePayload, turma_id: formTurmasIds[0] || null })
+          .eq('id', editandoId)
         if (error) throw error
+        // Sync servidor's escola_ids on update too
+        const { data: servAtual } = await supabase
+          .from('eja_servidores')
+          .select('escola_ids')
+          .eq('id', formServidorId)
+          .single()
+        const atuais = (servAtual as any)?.escola_ids || []
+        if (!atuais.includes(formEscolaId)) {
+          await supabase
+            .from('eja_servidores')
+            .update({ escola_ids: [...atuais, formEscolaId] })
+            .eq('id', formServidorId)
+        }
         showToast('Lotação atualizada com sucesso!')
       } else {
-        const { error } = await supabase.from('eja_lotacoes').insert(payload)
+        const records = formTurmasIds.map(turma_id => ({ ...basePayload, turma_id }))
+        const { error } = await supabase.from('eja_lotacoes').insert(records)
         if (error) throw error
-        showToast('Lotação criada com sucesso!')
+        // Sync servidor's escola_ids
+        const { data: servAtual } = await supabase
+          .from('eja_servidores')
+          .select('escola_ids')
+          .eq('id', formServidorId)
+          .single()
+        const atuais = (servAtual as any)?.escola_ids || []
+        if (!atuais.includes(formEscolaId)) {
+          await supabase
+            .from('eja_servidores')
+            .update({ escola_ids: [...atuais, formEscolaId] })
+            .eq('id', formServidorId)
+        }
+        showToast(`${records.length} lotação(ões) criada(s) com sucesso!`)
       }
       setModalOpen(false)
       resetForm()
@@ -274,12 +331,22 @@ export default function LotacoesPage() {
   const turmasDisponiveis = classificacaoServidor === 'Coordenador'
     ? []
     : getTurmasPorClassificacao(formEscolaId, classificacaoServidor)
-  const periodoSelecionado = formTurmaId ? getPeriodoFromTurma(formEscolaId, formTurmaId) : null
+  const primeiraTurma = formTurmasIds[0] || null
+  const periodoSelecionado = primeiraTurma ? getPeriodoFromTurma(formEscolaId, primeiraTurma) : null
   const disciplinasDaMatriz = getDisciplinasDaMatriz(periodoSelecionado)
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
+      <div className="print-header">
+        Lotações EJA — {semestre}
+        {filtroEscola && ` — ${escolas.find(e => e.id === filtroEscola)?.nome || ''}`}
+        {searchTerm && ` — Busca: "${searchTerm}"`}
+        <br/>
+        <span style={{fontSize: '8pt', fontWeight: 'normal', color: '#666'}}>
+          {Object.keys(grouped).length} escola(s) · {Object.values(grouped).reduce((acc, g) => acc + Object.values(g.turmas).flat().length, 0)} lotação(ões) · {new Date().toLocaleDateString('pt-BR')}
+        </span>
+      </div>
+      <div className="flex items-center justify-between mb-8 print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
@@ -291,13 +358,39 @@ export default function LotacoesPage() {
             </div>
           </div>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg font-medium text-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Nova Lotação
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.print()}
+            className="no-print flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition shadow-sm text-sm"
+          >
+            <Printer className="w-4 h-4" />
+            Imprimir
+          </button>
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg font-medium text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Nova Lotação
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 mb-4">
+        <Calendar className="w-4 h-4 text-gray-400" />
+        {SEMESTRES.map(s => (
+          <button
+            key={s}
+            onClick={() => setSemestre(s)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              semestre === s
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {s}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -347,13 +440,29 @@ export default function LotacoesPage() {
                   <School className="w-4 h-4 text-purple-600" />
                 </div>
                 <h2 className="font-bold text-gray-900">{escolaGroup.nome}</h2>
+                {coordenadoresPorEscola.has(escolaId) && (
+                  <span className="text-xs font-medium text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                    Coordenador(a): {coordenadoresPorEscola.get(escolaId)}
+                  </span>
+                )}
                 <span className="text-xs text-gray-400 ml-auto">
                   {Object.values(escolaGroup.turmas).flat().length} lotação(ões)
                 </span>
               </div>
 
               <div className="divide-y divide-gray-50">
-                {Object.entries(escolaGroup.turmas).map(([turmaKey, lotacoesDaTurma]) => {
+                {Object.entries(escolaGroup.turmas)
+                  .sort(([aKey], [bKey]) => {
+                    if (aKey === '__coordenacao__' && bKey === '__coordenacao__') return 0
+                    if (aKey === '__coordenacao__') return 1
+                    if (bKey === '__coordenacao__') return -1
+                    const pA = getPeriodoFromTurma(escolaId, aKey) || ''
+                    const pB = getPeriodoFromTurma(escolaId, bKey) || ''
+                    const diff = getPeriodoIndex(pA) - getPeriodoIndex(pB)
+                    if (diff !== 0) return diff
+                    return aKey.localeCompare(bKey)
+                  })
+                  .map(([turmaKey, lotacoesDaTurma]) => {
                   const isCoordenacao = turmaKey === '__coordenacao__'
                   return (
                     <div key={turmaKey}>
@@ -366,7 +475,13 @@ export default function LotacoesPage() {
                         ) : (
                           <>
                             <BookOpen className="w-4 h-4 text-amber-500" />
-                            <span className="text-sm font-medium text-amber-700">{turmaKey}</span>
+                            <span className="text-sm font-medium text-amber-700">
+                              {(() => {
+                                const periodo = getPeriodoFromTurma(escolaId, turmaKey)
+                                return periodo ? `${periodo} / ` : ''
+                              })()}
+                              {turmaKey}
+                            </span>
                           </>
                         )}
                         <span className="text-xs text-gray-400 ml-auto">{lotacoesDaTurma.length} servidor(es)</span>
@@ -407,16 +522,21 @@ export default function LotacoesPage() {
                                       {lot.disciplina}
                                     </span>
                                   )}
-                                  {lot.carga_horaria && (
-                                    <span className="flex items-center gap-1">
-                                      <Clock className="w-3.5 h-3.5" />
-                                      {lot.carga_horaria}h
-                                    </span>
-                                  )}
+                                  {(() => {
+                                    const periodo = getPeriodoFromTurma(lot.escola_id, turmaKey)
+                                    const ch = lot.regente
+                                      ? null
+                                      : lot.disciplina
+                                        ? getChPrevista(lot.disciplina, periodo)
+                                        : null
+                                    return ch != null ? (
+                                      <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{ch}h</span>
+                                    ) : null
+                                  })()}
                                   <span className="text-xs text-gray-400">Mat: {lot.servidor.matricula}</span>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1 shrink-0">
+                              <div className="flex items-center gap-1 shrink-0 no-print">
                                 <button
                                   onClick={() => openEdit(lot)}
                                   className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
@@ -478,7 +598,7 @@ export default function LotacoesPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Escola *</label>
                 <select
                   value={formEscolaId}
-                  onChange={e => { setFormEscolaId(e.target.value); setFormTurmaId('') }}
+                  onChange={e => { setFormEscolaId(e.target.value); setFormTurmasIds([]) }}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm"
                 >
                   <option value="">Selecione uma escola</option>
@@ -490,38 +610,60 @@ export default function LotacoesPage() {
 
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
-                  <label className="text-sm font-medium text-gray-700">Turma</label>
+                  <label className="text-sm font-medium text-gray-700">Turmas</label>
                   {classificacaoServidor === 'Coordenador' && (
                     <span className="text-xs text-purple-500 bg-purple-50 px-2 py-0.5 rounded-full">
                       Coordenador vincula-se à escola inteira
                     </span>
                   )}
+                  {!editandoId && formTurmasIds.length > 0 && (
+                    <span className="text-xs text-gray-400 ml-auto">
+                      {formTurmasIds.length} selecionada(s)
+                    </span>
+                  )}
                 </div>
-                <select
-                  value={formTurmaId}
-                  onChange={e => { setFormTurmaId(e.target.value); setFormDisciplina('') }}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm disabled:opacity-50 disabled:bg-gray-50"
-                  disabled={!formEscolaId || classificacaoServidor === 'Coordenador'}
-                >
-                  <option value="">
+                {!formEscolaId || classificacaoServidor === 'Coordenador' ? (
+                  <div className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-gray-50 text-sm text-gray-400">
                     {classificacaoServidor === 'Coordenador'
                       ? 'Vinculado à escola'
-                      : !formEscolaId
-                      ? 'Selecione uma escola primeiro'
-                      : 'Selecione uma turma'}
-                  </option>
-                  {turmasDisponiveis.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-                {classificacaoServidor !== 'Coordenador' && formEscolaId && turmasDisponiveis.length === 0 && (
+                      : 'Selecione uma escola primeiro'}
+                  </div>
+                ) : turmasDisponiveis.length === 0 ? (
                   <p className="text-xs text-amber-600 mt-1">Nenhuma turma disponível para esta classificação</p>
+                ) : (
+                  <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-xl divide-y divide-gray-100">
+                    {turmasDisponiveis.map(t => {
+                      const checked = formTurmasIds.includes(t)
+                      return (
+                        <label
+                          key={t}
+                          className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition text-sm ${
+                            checked ? 'bg-indigo-50/50' : ''
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setFormTurmasIds(prev =>
+                                checked ? prev.filter(id => id !== t) : [...prev, t]
+                              )
+                              setFormDisciplina('')
+                            }}
+                            disabled={editandoId !== null}
+                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          />
+                          <span className="text-gray-700">{t}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
 
               {periodoSelecionado && disciplinasDaMatriz.length > 0 && (
-                <div>
-                  {classificacaoServidor === '1º segmento' && formTurmaId ? (
+                <div className="space-y-4">
+                  {classificacaoServidor === '1º segmento' && (
                     <label className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl cursor-pointer hover:bg-blue-100/50 transition">
                       <input
                         type="checkbox"
@@ -531,11 +673,12 @@ export default function LotacoesPage() {
                       />
                       <div>
                         <span className="font-medium text-blue-800">Regente da turma (todas as disciplinas)</span>
-                        <p className="text-sm text-blue-600 mt-0.5">O professor assume todas as disciplinas exceto Educação Física nesta turma</p>
+                        <p className="text-sm text-blue-600 mt-0.5">Marque para cobrir todas as disciplinas exceto Educação Física. Desmarque para escolher uma disciplina específica.</p>
                       </div>
                     </label>
-                  ) : (
-                    <>
+                  )}
+                  {!formRegente && (
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">
                         Disciplina <span className="text-gray-400 font-normal">(da Matriz - {periodoSelecionado})</span>
                       </label>
@@ -551,7 +694,7 @@ export default function LotacoesPage() {
                           </option>
                         ))}
                       </select>
-                    </>
+                    </div>
                   )}
                 </div>
               )}
@@ -568,18 +711,6 @@ export default function LotacoesPage() {
                   />
                 </div>
               )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Carga Horária (h/semana)</label>
-                <input
-                  type="number"
-                  value={formCargaHoraria}
-                  onChange={e => setFormCargaHoraria(e.target.value)}
-                  placeholder="Ex: 20"
-                  min="0"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm"
-                />
-              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Função na Lotação</label>

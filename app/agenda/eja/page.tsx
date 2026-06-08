@@ -5,13 +5,17 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useSetorEJA } from '@/hooks/useSetorEJA'
-import { FileSpreadsheet, Users, ClipboardList, BookOpen, AlertTriangle, School, GraduationCap, ArrowRight, Clock, Building2, AlertCircle } from 'lucide-react'
+import { FileSpreadsheet, Users, ClipboardList, BookOpen, AlertTriangle, School, GraduationCap, ArrowRight, Clock, Building2, AlertCircle, Calendar } from 'lucide-react'
+
+const SEMESTRES = ['2026.1', '2026.2']
 
 export default function EJAPage() {
   const { isSetorEJA, loading } = useSetorEJA()
   const router = useRouter()
-  const [stats, setStats] = useState({ servidores: 0, escolas: 0, lotacoes: 0, carencias: 0, naoLotados: 0, escolasComCarencia: 0, matrizCompleta: true })
+  const [stats, setStats] = useState({ servidores: 0, escolas: 0, lotacoes: 0, carencias: 0, carenciasHoras: 0, naoLotados: 0, escolasComCarencia: 0, matrizCompleta: true })
+  const [nomesNaoLotados, setNomesNaoLotados] = useState<string[]>([])
   const [ultimasLotacoes, setUltimasLotacoes] = useState<any[]>([])
+  const [semestre, setSemestre] = useState('2026.1')
 
   useEffect(() => {
     if (!loading && !isSetorEJA) {
@@ -35,30 +39,38 @@ export default function EJAPage() {
     Promise.all([
       supabase.from('eja_servidores').select('id', { count: 'exact', head: true }).eq('ativo', true),
       supabase.from('escolas_eja').select('*', { count: 'exact', head: true }).eq('ativa', true),
-      supabase.from('eja_lotacoes').select('*', { count: 'exact', head: true }),
-      supabase.from('eja_servidores').select('id').eq('ativo', true),
-      supabase.from('eja_lotacoes').select('servidor_id, escola_id, turma_id, disciplina, regente'),
+      supabase.from('eja_lotacoes').select('*', { count: 'exact', head: true }).eq('semestre', semestre),
+      supabase.from('eja_servidores').select('id, nome, classificacao, escola_ids').eq('ativo', true),
+      supabase.from('eja_lotacoes').select('servidor_id, escola_id, turma_id, disciplina, regente').eq('semestre', semestre),
       supabase.from('escolas_eja').select('id, nome, turmas').eq('ativa', true),
-      supabase.from('eja_matriz').select('segmento, disciplina'),
+      supabase.from('eja_matriz').select('segmento, disciplina, ch_prevista'),
       supabase.from('eja_lotacoes')
         .select('*, servidor:eja_servidores(id, nome), escola:escolas_eja(id, nome)')
+        .eq('semestre', semestre)
         .order('created_at', { ascending: false })
         .limit(5),
       supabase.from('eja_matriz_escola').select('escola_id'),
     ]).then(([serv, esc, lot, todosServ, todosLot, escolasRes, matrizRes, ultimasRes, matrizEscolaRes]) => {
       const servidoresComLotacao = new Set(todosLot.data?.map(l => l.servidor_id) || [])
-      const naoLotados = (todosServ.data || []).filter(s => !servidoresComLotacao.has(s.id)).length
+      // Coordinators linked to schools are considered lotados
+      for (const s of (todosServ.data || [])) {
+        if ((s.classificacao as string) === 'Coordenador' && ((s.escola_ids as string[]) || []).length > 0) {
+          servidoresComLotacao.add(s.id)
+        }
+      }
+      const naoLotados = (todosServ.data || []).filter(s => !servidoresComLotacao.has(s.id))
+      const nomesNaoLotados = naoLotados.map(s => s.nome)
 
       const segToPeriodos: Record<string, string[]> = {
         '1º segmento': ['1º período', '2º período', '3º período', '4º período'],
         '2º segmento': ['5º período', '6º período', '7º período', '8º período'],
       }
-      const matrizPorPeriodo = new Map<string, string[]>()
+      const matrizPorPeriodo = new Map<string, { disciplina: string; ch_prevista: number | null }[]>()
       for (const m of (matrizRes.data || [])) {
         const periodos = segToPeriodos[m.segmento as string] || [m.segmento as string]
         for (const periodo of periodos) {
           const arr = matrizPorPeriodo.get(periodo) || []
-          arr.push(m.disciplina as string)
+          arr.push({ disciplina: m.disciplina as string, ch_prevista: (m.ch_prevista as number | null) })
           matrizPorPeriodo.set(periodo, arr)
         }
       }
@@ -71,6 +83,7 @@ export default function EJAPage() {
       }
 
       let carencias = 0
+      let carenciasHoras = 0
       const escolasComCarenciaSet = new Set<string>()
       for (const escola of (escolasRes.data || []) as any[]) {
         if (!escola.turmas) continue
@@ -80,11 +93,12 @@ export default function EJAPage() {
           const disciplinas = matrizPorPeriodo.get(periodo) || []
           for (const turma of turmas) {
             const temRegente = regentesSet.has(`${escola.id}|${turma}`)
-            for (const disciplina of disciplinas) {
+            for (const { disciplina, ch_prevista } of disciplinas) {
               if (temRegente && disciplina !== 'Educação Física') continue
               const key = `${escola.id}|${turma}|${disciplina}`
               if (!lotacoesSet.has(key)) {
                 carencias++
+                carenciasHoras += ch_prevista || 0
                 escolasComCarenciaSet.add(escola.id)
               }
             }
@@ -103,14 +117,16 @@ export default function EJAPage() {
         escolas: esc.count || 0,
         lotacoes: lot.count || 0,
         carencias,
-        naoLotados,
+        carenciasHoras,
+        naoLotados: naoLotados.length,
         escolasComCarencia: escolasComCarenciaSet.size,
         matrizCompleta,
       })
+      setNomesNaoLotados(nomesNaoLotados)
 
       if (ultimasRes.data) setUltimasLotacoes(ultimasRes.data as any[])
     })
-  }, [isSetorEJA])
+  }, [isSetorEJA, semestre])
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -175,7 +191,7 @@ export default function EJAPage() {
           href: '/agenda/eja/lotacoes',
           icon: ClipboardList,
           label: 'Lotações',
-          desc: 'Vincular servidores a turmas e escolas, definir carga horária',
+          desc: 'Vincular servidores a turmas e escolas por semestre',
           count: stats.lotacoes,
           color: 'from-emerald-500 to-emerald-600',
           bg: 'bg-emerald-50',
@@ -225,6 +241,23 @@ export default function EJAPage() {
         </div>
       </div>
 
+      <div className="flex items-center gap-2 mb-6">
+        <Calendar className="w-4 h-4 text-gray-400" />
+        {SEMESTRES.map(s => (
+          <button
+            key={s}
+            onClick={() => setSemestre(s)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              semestre === s
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
       {!stats.matrizCompleta && (
         <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
@@ -262,11 +295,27 @@ export default function EJAPage() {
                   {card.count !== undefined && (
                     <div className="mt-4 flex items-center gap-2">
                       <span className={`text-2xl font-bold bg-white px-3 py-1 rounded-lg shadow-sm ${card.color.replace('from-', 'text-').replace(' to-', '')}`}>
-                        {card.count}
+                        {card.href === '/agenda/eja/carencias'
+                          ? `${stats.carencias} (${stats.carenciasHoras}h)`
+                          : card.count}
                       </span>
-                      <span className="text-sm text-gray-400">registros</span>
+                      <span className="text-sm text-gray-400">
+                        {card.href === '/agenda/eja/carencias' ? 'carências' : 'registros'}
+                      </span>
                       {card.extra && (
                         <span className="text-xs text-red-500 font-medium ml-auto">{card.extra}</span>
+                      )}
+                      {card.href === '/agenda/eja/servidores' && nomesNaoLotados.length > 0 && (
+                        <details className="mt-1" onClick={e => e.stopPropagation()}>
+                          <summary className="text-[10px] text-gray-400 cursor-pointer hover:text-gray-600">
+                            Ver quem são
+                          </summary>
+                          <ul className="mt-1 space-y-0.5">
+                            {nomesNaoLotados.map(n => (
+                              <li key={n} className="text-[11px] text-red-500">• {n}</li>
+                            ))}
+                          </ul>
+                        </details>
                       )}
                     </div>
                   )}

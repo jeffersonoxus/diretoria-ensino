@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useSetorEJA } from '@/hooks/useSetorEJA'
-import { AlertTriangle, CheckCircle, School, Filter, BookOpen, Users } from 'lucide-react'
+import { AlertTriangle, CheckCircle, School, Filter, BookOpen, Users, XCircle, Printer, Calendar } from 'lucide-react'
+
+const SEMESTRES = ['2026.1', '2026.2']
 
 function getSegmento(periodo: string): string {
   const match = periodo.match(/^(\d+)/)
@@ -36,6 +38,7 @@ interface MatrizRow {
   id: string
   segmento: string
   disciplina: string
+  ch_prevista: number | null
 }
 
 interface CarenciaItem {
@@ -44,8 +47,10 @@ interface CarenciaItem {
   periodo: string
   turma: string
   disciplina: string
+  ch_prevista: number | null
   status: 'preenchida' | 'carencia'
   professor: string | null
+  lotacaoId?: string | null
 }
 
 export default function CarenciasPage() {
@@ -57,10 +62,12 @@ export default function CarenciasPage() {
   const [lotacoes, setLotacoes] = useState<Lotacao[]>([])
   const [fetching, setFetching] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [semestre, setSemestre] = useState('2026.1')
 
   const [filtroEscola, setFiltroEscola] = useState('')
   const [filtroSegmento, setFiltroSegmento] = useState('')
   const [apenasCarencias, setApenasCarencias] = useState(false)
+  const [removendoLotacao, setRemovendoLotacao] = useState<string | null>(null)
 
   useEffect(() => {
     if (!loading && !isSetorEJA) {
@@ -79,7 +86,7 @@ export default function CarenciasPage() {
     Promise.all([
       supabase.from('escolas_eja').select('*').eq('ativa', true).order('nome'),
       supabase.from('eja_matriz').select('*').order('segmento'),
-      supabase.from('eja_lotacoes').select('*, servidor:eja_servidores(id, nome)'),
+      supabase.from('eja_lotacoes').select('*, servidor:eja_servidores(id, nome)').eq('semestre', semestre),
     ])
       .then(([escolasRes, matrizRes, lotacoesRes]) => {
         if (escolasRes.error) throw new Error(escolasRes.error.message)
@@ -94,7 +101,7 @@ export default function CarenciasPage() {
         setError(err.message)
       })
       .finally(() => setFetching(false))
-  }, [isSetorEJA])
+  }, [isSetorEJA, semestre])
 
   const lotacaoKey = (l: Lotacao) => `${l.escola_id}|${l.turma_id}|${l.disciplina}`
 
@@ -106,8 +113,47 @@ export default function CarenciasPage() {
     return map
   }, [lotacoes])
 
+  const regentesMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const l of lotacoes) {
+      if (l.regente && l.servidor) {
+        map.set(`${l.escola_id}|${l.turma_id}`, l.servidor.nome)
+      }
+    }
+    return map
+  }, [lotacoes])
+
+  async function removerLotacao(id: string, disciplina: string, professor: string) {
+    if (!confirm(`Remover ${professor} da disciplina "${disciplina}"? Isso criará uma carência.`)) return
+    setRemovendoLotacao(id)
+    const supabase = createClient()
+    try {
+      const { error } = await supabase.from('eja_lotacoes').delete().eq('id', id)
+      if (error) throw error
+      // Refresh data
+      const [escolasRes, matrizRes, lotacoesRes] = await Promise.all([
+        supabase.from('escolas_eja').select('*').eq('ativa', true).order('nome'),
+      supabase.from('eja_matriz').select('id, segmento, disciplina, ch_prevista').order('segmento'),
+        supabase.from('eja_lotacoes').select('*, servidor:eja_servidores(id, nome)').eq('semestre', semestre),
+      ])
+      if (!escolasRes.error) setEscolas(escolasRes.data as unknown as Escola[])
+      if (!matrizRes.error) setMatriz(matrizRes.data as MatrizRow[])
+      if (!lotacoesRes.error) setLotacoes(lotacoesRes.data as unknown as Lotacao[])
+    } catch (err) {
+      console.error('Erro ao remover lotação:', err)
+      alert('Erro ao remover lotação')
+    } finally {
+      setRemovendoLotacao(null)
+    }
+  }
+
+  interface DisciplinaInfo {
+    disciplina: string
+    ch_prevista: number | null
+  }
+
   const matrizPorPeriodo = useMemo(() => {
-    const map = new Map<string, string[]>()
+    const map = new Map<string, DisciplinaInfo[]>()
     const segToPeriodos: Record<string, string[]> = {
       '1º segmento': ['1º período', '2º período', '3º período', '4º período'],
       '2º segmento': ['5º período', '6º período', '7º período', '8º período'],
@@ -116,7 +162,7 @@ export default function CarenciasPage() {
       const periodos = segToPeriodos[m.segmento] || [m.segmento]
       for (const periodo of periodos) {
         const arr = map.get(periodo) || []
-        arr.push(m.disciplina)
+        arr.push({ disciplina: m.disciplina, ch_prevista: m.ch_prevista })
         map.set(periodo, arr)
       }
     }
@@ -154,7 +200,7 @@ export default function CarenciasPage() {
         if (!segmento) continue
         if (filtroSegmento && segmento !== filtroSegmento) continue
 
-        const disciplinasNecessarias = matrizPorPeriodo.get(periodo) || []
+        const disciplinasNecessarias: DisciplinaInfo[] = matrizPorPeriodo.get(periodo) || []
 
         for (const turma of turmas) {
           // Check if turma has a regente (professor covering all disciplines)
@@ -164,11 +210,11 @@ export default function CarenciasPage() {
             l.regente === true
           )
 
-          for (const disciplina of disciplinasNecessarias) {
+          for (const { disciplina, ch_prevista } of disciplinasNecessarias) {
             const key = `${escola.id}|${turma}|${disciplina}`
             const lotacao = lotacoesMap.get(key)
 
-            // If regente exists, all disciplines except Educação Física are covered
+              // If regente exists, all disciplines except Educação Física are covered
             if (temRegente && disciplina !== 'Educação Física' && !lotacao) {
               items.push({
                 escolaId: escola.id,
@@ -176,8 +222,10 @@ export default function CarenciasPage() {
                 periodo,
                 turma,
                 disciplina,
+                ch_prevista,
                 status: 'preenchida',
                 professor: '(regente)',
+                lotacaoId: null,
               })
               continue
             }
@@ -190,8 +238,10 @@ export default function CarenciasPage() {
               periodo,
               turma,
               disciplina,
+              ch_prevista,
               status: preenchida ? 'preenchida' : 'carencia',
               professor: lotacao?.servidor?.nome || null,
+              lotacaoId: lotacao?.id || null,
             })
           }
         }
@@ -209,14 +259,18 @@ export default function CarenciasPage() {
   const stats = useMemo(() => {
     const escolasSet = new Set(carenciasData.map((i) => i.escolaId))
     const turmasSet = new Set(carenciasData.map((i) => `${i.escolaId}|${i.turma}`))
-    const totalCarencias = carenciasData.filter((i) => i.status === 'carencia').length
-    const totalPreenchidas = carenciasData.filter((i) => i.status === 'preenchida').length
+    const carencias = carenciasData.filter((i) => i.status === 'carencia')
+    const preenchidas = carenciasData.filter((i) => i.status === 'preenchida')
+    const totalHorasCarencia = carencias.reduce((acc, i) => acc + (i.ch_prevista || 0), 0)
+    const totalHorasPreenchidas = preenchidas.reduce((acc, i) => acc + (i.ch_prevista || 0), 0)
 
     return {
       totalEscolas: escolasSet.size,
       totalTurmas: turmasSet.size,
-      totalCarencias,
-      totalPreenchidas,
+      totalCarencias: carencias.length,
+      totalHorasCarencia,
+      totalPreenchidas: preenchidas.length,
+      totalHorasPreenchidas,
     }
   }, [carenciasData])
 
@@ -248,18 +302,52 @@ export default function CarenciasPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
+      <div className="print-header">
+        Carências EJA — {semestre}
+        {filtroEscola && ` — ${escolas.find(e => e.id === filtroEscola)?.nome || ''}`}
+        {filtroSegmento && ` — ${filtroSegmento}`}
+        {apenasCarencias && ' — Apenas carências'}
+        <br/>
+        <span style={{fontSize: '8pt', fontWeight: 'normal', color: '#666'}}>
+          {stats.totalCarencias} carências ({stats.totalHorasCarencia}h) · {stats.totalPreenchidas} preenchidas ({stats.totalHorasPreenchidas}h) · {new Date().toLocaleDateString('pt-BR')}
+        </span>
+      </div>
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
-            <AlertTriangle className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
+              <AlertTriangle className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold text-gray-900">Carências</h1>
+              <p className="text-sm text-gray-500">
+                Turmas sem professor ou disciplinas descobertas
+              </p>
+            </div>
+            <button
+              onClick={() => window.print()}
+              className="no-print flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition shadow-sm text-sm shrink-0"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimir
+            </button>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Carências</h1>
-            <p className="text-sm text-gray-500">
-              Turmas sem professor ou disciplinas descobertas
-            </p>
-          </div>
-        </div>
+      </div>
+
+      <div className="flex items-center gap-2 mb-4">
+        <Calendar className="w-4 h-4 text-gray-400" />
+        {SEMESTRES.map(s => (
+          <button
+            key={s}
+            onClick={() => setSemestre(s)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              semestre === s
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {s}
+          </button>
+        ))}
       </div>
 
       {error && (
@@ -323,7 +411,7 @@ export default function CarenciasPage() {
             </span>
           </div>
           <span className="text-2xl font-bold text-red-600">
-            {fetching ? '-' : stats.totalCarencias}
+            {fetching ? '-' : `${stats.totalCarencias} (${stats.totalHorasCarencia}h)`}
           </span>
         </div>
         <div className="bg-white rounded-xl border p-4">
@@ -334,7 +422,7 @@ export default function CarenciasPage() {
             </span>
           </div>
           <span className="text-2xl font-bold text-emerald-600">
-            {fetching ? '-' : stats.totalPreenchidas}
+            {fetching ? '-' : `${stats.totalPreenchidas} (${stats.totalHorasPreenchidas}h)`}
           </span>
         </div>
       </div>
@@ -417,6 +505,9 @@ export default function CarenciasPage() {
             const totalCarenciasEscola = items.filter(
               (i) => i.status === 'carencia',
             ).length
+            const totalHorasCarenciaEscola = items
+              .filter((i) => i.status === 'carencia')
+              .reduce((acc, i) => acc + (i.ch_prevista || 0), 0)
 
             return (
               <div
@@ -431,8 +522,7 @@ export default function CarenciasPage() {
                   {totalCarenciasEscola > 0 ? (
                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
                       <AlertTriangle className="w-3.5 h-3.5" />
-                      {totalCarenciasEscola} carência
-                      {totalCarenciasEscola !== 1 ? 's' : ''}
+                      {totalCarenciasEscola} carência{totalCarenciasEscola !== 1 ? 's' : ''} · {totalHorasCarenciaEscola}h
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
@@ -445,10 +535,18 @@ export default function CarenciasPage() {
                 <div className="divide-y divide-gray-100">
                   {turmasOrdenadas.map(([key, turmaItems]) => {
                     const [periodo, turma] = key.split('|')
+                    const nomeRegente = regentesMap.get(`${escolaId}|${turma}`)
                     return (
                       <div key={key} className="px-6 py-3">
-                        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                          {periodo} / {turma}
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                            {periodo} / {turma}
+                          </span>
+                          {nomeRegente && (
+                            <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                              Regente: {nomeRegente}
+                            </span>
+                          )}
                         </div>
                         <div className="space-y-1.5">
                           {turmaItems.map((item, idx) => (
@@ -470,6 +568,9 @@ export default function CarenciasPage() {
                                 </span>
                               )}
                               <span className="font-medium">{item.disciplina}</span>
+                              {item.ch_prevista && (
+                                <span className="text-xs text-gray-400">{item.ch_prevista}h</span>
+                              )}
                               {item.professor ? (
                                 <span className="text-gray-500">
                                   - {item.professor}
@@ -478,6 +579,16 @@ export default function CarenciasPage() {
                                 <span className="text-red-500 font-medium">
                                   - CARÊNCIA
                                 </span>
+                              )}
+                              {item.status === 'preenchida' && item.lotacaoId && (
+                                <button
+                                  onClick={() => removerLotacao(item.lotacaoId!, item.disciplina, item.professor || '')}
+                                  disabled={removendoLotacao === item.lotacaoId}
+                                  className="ml-auto p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50 no-print"
+                                  title="Remover lotação"
+                                >
+                                  <XCircle size={16} />
+                                </button>
                               )}
                             </div>
                           ))}
