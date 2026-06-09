@@ -142,19 +142,23 @@ export default function IndicadoresPage() {
 
       const { data: perfil } = await supabase
         .from('perfis')
-        .select('id')
+        .select('id, nivel_acesso')
         .eq('email', user.email)
         .single()
 
       if (perfil) {
-        const { data: setores } = await supabase
-          .from('setores')
-          .select('id')
-          .contains('pessoas', [perfil.id])
+        const temAcessoAmplo = perfil.nivel_acesso === 'gerencial' || perfil.nivel_acesso === 'diretivo' || perfil.nivel_acesso === 'administrativo'
 
-        if (!setores || setores.length === 0) {
-          router.push('/agenda/perfil')
-          return
+        if (!temAcessoAmplo) {
+          const { data: setores } = await supabase
+            .from('setores')
+            .select('id')
+            .contains('pessoas', [perfil.id])
+
+          if (!setores || setores.length === 0) {
+            router.push('/agenda/perfil')
+            return
+          }
         }
       }
 

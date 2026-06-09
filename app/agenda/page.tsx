@@ -162,10 +162,13 @@ export default function AgendaPage() {
   }, [])
 
   useEffect(() => {
-    if (!loadingAcesso && userSetoresIds.length > 0) {
-      carregarDados()
+    if (!loadingAcesso) {
+      const temAcesso = userNivelAcesso === 'gerencial' || userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo'
+      if (userSetoresIds.length > 0 || temAcesso) {
+        carregarDados()
+      }
     }
-  }, [loadingAcesso, userSetoresIds])
+  }, [loadingAcesso, userSetoresIds, userNivelAcesso])
 
   // Helper para nome do usuário
   const getUsuarioNome = (userId: string) => {
