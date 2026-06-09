@@ -131,8 +131,8 @@ export const Sidebar = () => {
     router.refresh()
   }
 
-  // Verificar se o usuário é admin (diretivo ou administrativo)
-  const isAdmin = nivelAcesso === 'diretivo' || nivelAcesso === 'administrativo'
+  // Verificar se o usuário tem acesso amplo (gerencial, diretivo ou administrativo)
+  const isAdmin = nivelAcesso === 'gerencial' || nivelAcesso === 'diretivo' || nivelAcesso === 'administrativo'
   const isSuperAdmin = nivelAcesso === 'administrativo'
 
   // Definir quais menus mostrar baseado se o usuário tem setor
@@ -142,11 +142,11 @@ export const Sidebar = () => {
       return [
         { href: '/agenda', icon: Home, label: 'Agenda', show: true },
         { href: '/agenda/perfil', icon: User, label: 'Meu Perfil', show: true },
-        { href: '/agenda/indicadores', icon: BarChart3, label: 'Indicadores', show: temSetor },
+        { href: '/agenda/indicadores', icon: BarChart3, label: 'Indicadores', show: true },
         { href: '/agenda/acoes', icon: ClipboardCheck, label: 'Gerenciar Ações', show: true },
-        { href: '/agenda/documentos', icon: FileText, label: 'Documentos', show: temSetor, badge: documentosPendentes },
+        { href: '/agenda/documentos', icon: FileText, label: 'Documentos', show: true, badge: documentosPendentes },
         { href: '/agenda/eja', icon: GraduationCap, label: 'EJA', show: isSetorEJA && !loadingSetorEJA },
-        { href: '/agenda/modelos', icon: Puzzle, label: 'Ações do Setor', show: true },
+        { href: '/agenda/modelos', icon: Puzzle, label: 'Ações do Setor', show: temSetor || isSuperAdmin },
         { href: '/agenda/planos', icon: Target, label: 'Planos de Ação', show: true },
       ]
     }
@@ -341,8 +341,8 @@ export const Sidebar = () => {
                 )
               })}
               
-                  {/* Seção Admin separada - só aparece se for admin */}
-                  {isAdmin && (
+                  {/* Seção Admin separada - só aparece para administrativo */}
+                  {isSuperAdmin && (
                     <>
                       <div className="pt-4 mt-4 border-t">
                         <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">

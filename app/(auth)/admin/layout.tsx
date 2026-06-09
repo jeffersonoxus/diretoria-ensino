@@ -23,7 +23,7 @@ export default async function AdminLayout({
     .single()
 
   const nivelAcesso = perfil?.nivel_acesso
-  const podeAcessarAdmin = nivelAcesso === 'diretivo' || nivelAcesso === 'administrativo'
+  const podeAcessarAdmin = nivelAcesso === 'administrativo'
   
   if (!podeAcessarAdmin) {
     redirect('/agenda')

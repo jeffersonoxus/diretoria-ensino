@@ -32,7 +32,7 @@ export default function DocumentosPage() {
   const [filtroSetor, setFiltroSetor] = useState('')
   const [filtroStatus, setFiltroStatus] = useState('')
 
-  const isAdmin = userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo'
+  const isAdmin = userNivelAcesso === 'gerencial' || userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo'
 
   useEffect(() => {
     carregarDados()
