@@ -183,11 +183,13 @@ export default function AgendaPage() {
     }
   }, [loadingAcesso, userSetoresIds, userNivelAcesso])
 
+  const filtroInicialAplicado = useRef(false)
   useEffect(() => {
-    if (!loadingAcesso && userSetoresIds.length > 0 && userNivelAcesso === 'tecnico' && filterSetor === 'todos') {
+    if (!loadingAcesso && !filtroInicialAplicado.current && userSetoresIds.length > 0 && userNivelAcesso === 'tecnico') {
       setFilterSetor(userSetoresIds[0])
+      filtroInicialAplicado.current = true
     }
-  }, [loadingAcesso, userSetoresIds, userNivelAcesso, filterSetor])
+  }, [loadingAcesso, userSetoresIds, userNivelAcesso])
 
   // Helper para nome do usuário
   const getUsuarioNome = (userId: string) => {

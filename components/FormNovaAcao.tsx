@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Calendar, Car, EyeOff, Eye, AlertCircle, CheckCircle2, X, Bus } from "lucide-react"
+import { Calendar, Car, EyeOff, Eye, AlertCircle, CheckCircle2, X, Bus, Search } from "lucide-react"
 
 export interface ParametroExtra {
   id: string
@@ -218,6 +218,7 @@ export default function FormNovaAcao({
   const [setoresSelecionados, setSetoresSelecionados] = useState<string[]>([])
   const [tipoAcaoId, setTipoAcaoId] = useState('')
   const [locaisSelecionados, setLocaisSelecionados] = useState<string[]>([])
+  const [filtroLocalSearch, setFiltroLocalSearch] = useState('')
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
   const [necessitaTransporte, setNecessitaTransporte] = useState(false)
@@ -589,28 +590,44 @@ export default function FormNovaAcao({
               </div>
               <div>
                 <label className="block text-base font-bold text-gray-700 mb-2">Locais <span className="text-sm font-normal text-gray-400">(máx 5)</span></label>
-                <div className={`max-h-48 overflow-y-auto border rounded-lg divide-y divide-gray-100 ${locaisSelecionados.length === 0 ? 'border-red-400' : ''}`}>
-                  {locais.length === 0 ? (
-                    <p className="px-4 py-3 text-sm text-gray-400">Nenhum local cadastrado</p>
-                  ) : locais.map(l => {
-                    const checked = locaisSelecionados.includes(l.id)
-                    return (
-                      <label key={l.id} className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition text-sm ${checked ? 'bg-indigo-50/50' : ''}`}>
-                        <input type="checkbox" checked={checked} onChange={() => {
-                          if (checked) {
-                            setLocaisSelecionados(prev => prev.filter(id => id !== l.id))
-                          } else {
-                            if (locaisSelecionados.length >= 5) {
-                              setMensagemErro("Máximo de 5 locais por ação")
-                              return
+                <div className={`border rounded-lg ${locaisSelecionados.length === 0 ? 'border-red-400' : ''}`}>
+                  <div className="relative">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={filtroLocalSearch}
+                      onChange={e => setFiltroLocalSearch(e.target.value)}
+                      placeholder="Buscar local..."
+                      className="w-full p-2.5 pl-9 border-b rounded-t-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div className="max-h-44 overflow-y-auto divide-y divide-gray-100">
+                    {locais.length === 0 ? (
+                      <p className="px-4 py-3 text-sm text-gray-400">Nenhum local cadastrado</p>
+                    ) : locais.filter(l =>
+                      filtroLocalSearch === '' ||
+                      l.nome.toLowerCase().includes(filtroLocalSearch.toLowerCase()) ||
+                      locaisSelecionados.includes(l.id)
+                    ).map(l => {
+                      const checked = locaisSelecionados.includes(l.id)
+                      return (
+                        <label key={l.id} className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition text-sm ${checked ? 'bg-indigo-50/50' : ''}`}>
+                          <input type="checkbox" checked={checked} onChange={() => {
+                            if (checked) {
+                              setLocaisSelecionados(prev => prev.filter(id => id !== l.id))
+                            } else {
+                              if (locaisSelecionados.length >= 5) {
+                                setMensagemErro("Máximo de 5 locais por ação")
+                                return
+                              }
+                              setLocaisSelecionados(prev => [...prev, l.id])
                             }
-                            setLocaisSelecionados(prev => [...prev, l.id])
-                          }
-                        }} className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
-                        <span className="text-gray-700">{l.nome}</span>
-                      </label>
-                    )
-                  })}
+                          }} className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
+                          <span className="text-gray-700">{l.nome}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
                 </div>
                 {locaisSelecionados.length > 0 && (
                   <p className="text-xs text-gray-400 mt-1">{locaisSelecionados.length} selecionado(s)</p>
