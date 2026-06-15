@@ -35,6 +35,7 @@ export default function AgendaPage() {
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [tiposAcoes, setTiposAcoes] = useState<TipoAcao[]>([])
   const [locais, setLocais] = useState<Array<{ id: string; nome: string }>>([])
+  const [locaisPorAcao, setLocaisPorAcao] = useState<Record<string, string[]>>({})
   const [loading, setLoading] = useState(true)
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [mostrarImpressao, setMostrarImpressao] = useState(false)
@@ -139,12 +140,13 @@ export default function AgendaPage() {
     
     setLoading(true)
     
-    const [acoesRes, setoresRes, perfisRes, tiposRes, locaisRes] = await Promise.all([
+    const [acoesRes, setoresRes, perfisRes, tiposRes, locaisRes, acaoLocaisRes] = await Promise.all([
       supabase.from('acoes').select('*').order('data_inicio', { ascending: true }),
       supabase.from('setores').select('*'),
       supabase.from('perfis').select('id, nome'),
       supabase.from('tipo_acao').select('*'),
-      supabase.from('locais').select('*').eq('ativo', true).order('nome')
+      supabase.from('locais').select('*').eq('ativo', true).order('nome'),
+      supabase.from('acao_locais').select('acao_id, local_id')
     ])
     
     setAcoes(acoesRes.data || [])
@@ -152,6 +154,17 @@ export default function AgendaPage() {
     setUsuarios(perfisRes.data || [])
     setTiposAcoes(tiposRes.data || [])
     setLocais(locaisRes.data || [])
+
+    const localIdToNome = new Map((locaisRes.data || []).map(l => [l.id, l.nome]))
+    const locaisMap: Record<string, string[]> = {}
+    ;(acaoLocaisRes.data || []).forEach(al => {
+      if (!locaisMap[al.acao_id]) locaisMap[al.acao_id] = []
+      const nome = localIdToNome.get(al.local_id)
+      if (nome && !locaisMap[al.acao_id].includes(nome)) {
+        locaisMap[al.acao_id].push(nome)
+      }
+    })
+    setLocaisPorAcao(locaisMap)
     
     setLoading(false)
   }
@@ -170,11 +183,33 @@ export default function AgendaPage() {
     }
   }, [loadingAcesso, userSetoresIds, userNivelAcesso])
 
+  useEffect(() => {
+    if (!loadingAcesso && userSetoresIds.length > 0 && userNivelAcesso === 'tecnico' && filterSetor === 'todos') {
+      setFilterSetor(userSetoresIds[0])
+    }
+  }, [loadingAcesso, userSetoresIds, userNivelAcesso, filterSetor])
+
   // Helper para nome do usuário
   const getUsuarioNome = (userId: string) => {
     const usuario = usuarios.find(u => u.id === userId)
     return usuario?.nome || 'Sistema'
   }
+
+  const CORES_SETOR: Record<string, { fg: string; bg: string }> = {
+    'Programas e Projetos': { fg: '#6D28D9', bg: 'rgba(109,40,217,0.18)' },
+    'Articulação de Avaliação': { fg: '#EA580C', bg: 'rgba(234,88,12,0.18)' },
+    'Busca Ativa Escolar - BAE': { fg: '#B45309', bg: 'rgba(180,83,9,0.18)' },
+    'Educação Especial': { fg: '#0284C7', bg: 'rgba(2,132,199,0.18)' },
+    'Anos Iniciais': { fg: '#0D9488', bg: 'rgba(13,148,136,0.18)' },
+    'EJA': { fg: '#C026D3', bg: 'rgba(192,38,211,0.18)' },
+    'Anos Finais': { fg: '#8B4513', bg: 'rgba(139,69,19,0.18)' },
+    'Articulação de Arte e Cultura': { fg: '#BE185D', bg: 'rgba(190,24,93,0.18)' },
+    'Tempo Integral': { fg: '#047857', bg: 'rgba(4,120,87,0.18)' },
+    'EI': { fg: '#4338CA', bg: 'rgba(67,56,202,0.18)' },
+    'PNEERQ': { fg: '#1E3A5F', bg: 'rgba(30,58,95,0.18)' },
+  }
+  const getCorSetor = (nome: string): string => CORES_SETOR[nome]?.fg || '#6b7280'
+  const getCorSetorBg = (nome: string): string => CORES_SETOR[nome]?.bg || 'rgba(107,114,128,0.12)'
 
   // Limitar navegação do calendário
   const podeNavegar = (direcao: 'anterior' | 'proximo') => {
@@ -315,9 +350,10 @@ export default function AgendaPage() {
       })
     }
     if (filterLocal) {
-      filtradas = filtradas.filter(a => 
-        a.local && a.local.toLowerCase().includes(filterLocal.toLowerCase())
-      )
+      filtradas = filtradas.filter(a => {
+        const locaisDaAcao = locaisPorAcao[a.id] || (a.local ? [a.local] : [])
+        return locaisDaAcao.some(l => l.toLowerCase().includes(filterLocal.toLowerCase()))
+      })
     }
     if (filterTransporte !== 'todos') {
       const necessita = filterTransporte === 'sim'
@@ -351,7 +387,7 @@ export default function AgendaPage() {
     })
     
     return filtradas
-  }, [acoes, filterSetor, filterTipoAcao, filterStatus, filterUsuario, filterLocal, filterTransporte, filterDataInicio, filterDataFim, usuarios, filtrosExtras])
+  }, [acoes, filterSetor, filterTipoAcao, filterStatus, filterUsuario, filterLocal, filterTransporte, filterDataInicio, filterDataFim, usuarios, filtrosExtras, locaisPorAcao])
 
   // Ações com transporte
   const acoesComTransporte = useMemo(() => {
@@ -388,7 +424,7 @@ export default function AgendaPage() {
       mapa[key].push({
         id: acao.id,
         status: acao.status || 'Pendente',
-        local: acao.local,
+        locais: locaisPorAcao[acao.id] || (acao.local ? [acao.local] : []),
         pessoas: acao.pessoas || [],
         horario: new Date(acao.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         setor_id: acao.setor_id,
@@ -404,7 +440,7 @@ export default function AgendaPage() {
     })
     
     return mapa
-  }, [acoesFiltradas])
+  }, [acoesFiltradas, locaisPorAcao])
 
   // Dados para relatório
   const dadosParaRelatorio = useMemo(() => {
@@ -501,7 +537,7 @@ export default function AgendaPage() {
             <table>
               <thead>
                 <tr>
-                  <th>#</th><th>Tipo</th><th>Setor</th><th>Status</th><th>Local</th><th>Data</th>
+                  <th>#</th><th>Tipo</th><th>Setor</th><th>Status</th><th>Local(is)</th><th>Data</th>
                   ${incluirDescricao ? '<th>Descrição</th>' : ''}
                   ${incluirObservacoes ? '<th>Observações</th>' : ''}
                 </tr>
@@ -517,7 +553,7 @@ export default function AgendaPage() {
                       <td>${tipo}</td>
                       <td>${setor}</td>
                       <td>${acao.status || 'Pendente'}</td>
-                      <td>${acao.local || 'N/A'}</td>
+                      <td>${(locaisPorAcao[acao.id] && locaisPorAcao[acao.id].length > 0 ? locaisPorAcao[acao.id].join(', ') : acao.local) || 'N/A'}</td>
                       <td>${dataInicio}</td>
                       ${incluirDescricao ? `<td>${acao.descricao || '-'}</td>` : ''}
                       ${incluirObservacoes ? `<td>${acao.observacoes || '-'}</td>` : ''}
@@ -541,7 +577,7 @@ export default function AgendaPage() {
 
   const handleExportCSV = () => {
     const dados = dadosParaRelatorio
-    const headers = ['#', 'Tipo de Ação', 'Setor', 'Status', 'Local', 'Data']
+    const headers = ['#', 'Tipo de Ação', 'Setor', 'Status', 'Local(is)', 'Data']
     if (incluirDescricao) headers.push('Descrição')
     if (incluirObservacoes) headers.push('Observações')
     
@@ -552,7 +588,8 @@ export default function AgendaPage() {
       const setor = setores.find(s => s.id === acao.setor_id)?.nome || 'N/A'
       const dataInicio = acao.data_inicio ? new Date(acao.data_inicio).toLocaleDateString('pt-BR') : 'N/A'
       
-      const row = [index + 1, `"${tipo.replace(/"/g, '""')}"`, `"${setor.replace(/"/g, '""')}"`, acao.status || 'Pendente', `"${(acao.local || 'N/A').replace(/"/g, '""')}"`, `"${dataInicio}"`]
+      const locaisStr = (locaisPorAcao[acao.id] && locaisPorAcao[acao.id].length > 0 ? locaisPorAcao[acao.id].join(', ') : acao.local) || 'N/A'
+      const row = [index + 1, `"${tipo.replace(/"/g, '""')}"`, `"${setor.replace(/"/g, '""')}"`, acao.status || 'Pendente', `"${locaisStr.replace(/"/g, '""')}"`, `"${dataInicio}"`]
       
       if (incluirDescricao) {
         const descricao = (acao.descricao || '').replace(/"/g, '""').replace(/\n/g, ' ')
@@ -596,7 +633,7 @@ export default function AgendaPage() {
       return {
         numero: index + 1,
         data: dataInicio ? dataInicio.toLocaleDateString('pt-BR') : 'N/A',
-        local: acao.local || 'N/A',
+        local: (locaisPorAcao[acao.id] && locaisPorAcao[acao.id].length > 0 ? locaisPorAcao[acao.id].join(', ') : acao.local) || 'N/A',
         horaInicio,
         horaFim,
         qtdPessoas,
@@ -633,7 +670,7 @@ export default function AgendaPage() {
           <table>
             <thead>
               <tr>
-                <th>#</th><th>Data da solicitação</th><th>Local de destino</th><th>Horário previsto de saída</th><th>Horário previsto de retorno</th><th>Quantidade de pessoas</th><th>Finalidade da demanda</th><th>Responsável pela solicitação</th>
+                <th>#</th><th>Data da solicitação</th><th>Local(is) de destino</th><th>Horário previsto de saída</th><th>Horário previsto de retorno</th><th>Quantidade de pessoas</th><th>Finalidade da demanda</th><th>Responsável pela solicitação</th>
               </tr>
             </thead>
             <tbody>
@@ -722,35 +759,16 @@ export default function AgendaPage() {
     return Object.entries(tipoCount).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8)
   }, [acoesFiltradas, tiposAcoes])
 
-  const dadosPorTurno = useMemo(() => {
-    const turnoCount: Record<'Manhã' | 'Tarde' | 'Noite', number> = { Manhã: 0, Tarde: 0, Noite: 0 }
+  const dadosPorLocal = useMemo(() => {
+    const localCount: Record<string, number> = {}
     acoesFiltradas.forEach(acao => {
-      if (acao.data_inicio) turnoCount[determinarTurno(acao.data_inicio)]++
+      const locaisDaAcao = locaisPorAcao[acao.id] || (acao.local ? [acao.local] : [])
+      locaisDaAcao.forEach(local => {
+        localCount[local] = (localCount[local] || 0) + 1
+      })
     })
-    return Object.entries(turnoCount).filter(([_, value]) => value > 0).map(([name, value]) => ({ name, value }))
-  }, [acoesFiltradas])
-
-  const dadosMensais = useMemo(() => {
-    const meses: Record<string, { mes: string, total: number, realizadas: number }> = {}
-    acoesFiltradas.forEach(acao => {
-      const data = new Date(acao.created_at)
-      const mesKey = `${data.getFullYear()}-${data.getMonth() + 1}`
-      const mesNome = data.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
-      if (!meses[mesKey]) meses[mesKey] = { mes: mesNome, total: 0, realizadas: 0 }
-      meses[mesKey].total++
-      if (acao.status === 'Realizada' || acao.status === 'Realizada Parcialmente') meses[mesKey].realizadas++
-    })
-    return Object.values(meses).slice(-6)
-  }, [acoesFiltradas])
-
-  const dadosParticipantes = useMemo(() => {
-    const participanteCount: Record<string, number> = {}
-    acoesFiltradas.forEach(acao => {
-      const participantes = acao.pessoas || []
-      participantes.forEach((pessoa: string) => participanteCount[pessoa] = (participanteCount[pessoa] || 0) + 1)
-    })
-    return Object.entries(participanteCount).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10)
-  }, [acoesFiltradas])
+    return Object.entries(localCount).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+  }, [acoesFiltradas, locaisPorAcao])
 
   const graficosExtras = useMemo(() => {
     if (filterTipoAcao === 'todos') return []
@@ -1007,7 +1025,7 @@ export default function AgendaPage() {
                         <tr className="bg-blue-600 text-white">
                           <th className="p-3 text-left rounded-tl-lg">#</th>
                           <th className="p-3 text-left">Data da solicitação</th>
-                          <th className="p-3 text-left">Local de destino</th>
+                          <th className="p-3 text-left">Local(is) de destino</th>
                           <th className="p-3 text-left">Horário previsto de saída</th>
                           <th className="p-3 text-left">Horário previsto de retorno</th>
                           <th className="p-3 text-center">Quantidade de pessoas</th>
@@ -1024,7 +1042,7 @@ export default function AgendaPage() {
                             <tr key={acao.id} className="border-b hover:bg-blue-50/50 transition">
                               <td className="p-3 font-medium">{index + 1}</td>
                               <td className="p-3">{dataInicio ? dataInicio.toLocaleDateString('pt-BR') : 'N/A'}</td>
-                              <td className="p-3 font-medium">{acao.local || 'N/A'}</td>
+                              <td className="p-3 font-medium">{(locaisPorAcao[acao.id] && locaisPorAcao[acao.id].length > 0 ? locaisPorAcao[acao.id].join(', ') : acao.local) || 'N/A'}</td>
                               <td className="p-3">{dataInicio ? dataInicio.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</td>
                               <td className="p-3">{dataFim ? dataFim.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</td>
                               <td className="p-3 text-center font-bold">{acao.pessoas?.length || 0}</td>
@@ -1184,7 +1202,7 @@ export default function AgendaPage() {
             </div>
 
             {turnos.map((turno, turnoIndex) => {
-              const bgColor = turno === 'Manhã' ? 'bg-blue-600/10' : turno === 'Tarde' ? 'bg-orange-600/10' : 'bg-slate-600/10'
+              const bgColor = turno === 'Manhã' ? 'bg-blue-600/5' : turno === 'Tarde' ? 'bg-orange-600/5' : 'bg-slate-600/5'
               return (
                 <div
                   key={turno}
@@ -1218,8 +1236,8 @@ export default function AgendaPage() {
                                 <div key={acaoIdx} onClick={(e) => { e.stopPropagation(); setModalAcao(acaoOriginal) }} className={`rounded-md p-1.5 text-xs border-l-4 ${borderColor} bg-white shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-[1.02]`}>
                                   <div className="flex items-center justify-between mb-1.5"><div className="flex flex-1 items-center justify-between gap-1 text-gray-400"><Clock size={10} className="text-gray-700" /><span className="text-xs font-mono font-medium text-gray-600">{acao.horario}</span>{acao.status === 'Pendente' && <span className="ml-auto text-amber-500 font-bold">Pendente</span>}{acao.status === 'Realizada' && <span className="ml-auto text-green-500 font-bold">Realizada</span>}{acao.status === 'Cancelada' && <span className="ml-auto text-red-500 font-bold">Cancelada</span>}</div></div>
                                   <p className="text-xs font-semibold text-gray-800 mb-1 line-clamp-2 leading-tight">{nomeTipo.length > 30 ? nomeTipo.substring(0, 20) + '…' : nomeTipo}</p>
-                                  {acao.local && (<div className="flex items-center gap-1 mb-1 text-gray-700"><MapPin strokeWidth={3} size={9} className='text-purple-600' /><span className="text-xs text-purple-600">{acao.local.length > 22 ? acao.local.substring(0, 20) + '…' : acao.local}</span></div>)}
-                                  <div className="flex items-center gap-1 text-gray-700"><Building2 size={9} /><span className="text-xs truncate">{setorCriador?.nome?.length > 18 ? setorCriador.nome.substring(0, 18) + '…' : setorCriador?.nome || 'N/I'}</span>{acao.necessita_transporte && <Car size={16} className="text-blue-500 ml-auto animate-bounce" />}</div>
+                                  {acao.locais && acao.locais.length > 0 && (<div className="flex items-center gap-1 mb-1 text-gray-700"><MapPin strokeWidth={3} size={9} className='text-purple-600' /><span className="text-xs text-purple-600">{acao.locais[0].length > 22 ? acao.locais[0].substring(0, 20) + '…' : acao.locais[0]}{acao.locais.length > 1 && <span className="text-purple-400"> +{acao.locais.length - 1}</span>}</span></div>)}
+                                  <div className="flex items-center gap-1 px-1.5 py-1 -mx-1.5 -mb-1.5 rounded-b-md" style={{ backgroundColor: getCorSetorBg(setorCriador?.nome || '') }}><Building2 size={9} style={{ color: getCorSetor(setorCriador?.nome || '') }} /><span className="text-xs font-semibold truncate max-w-[100px]" style={{ color: getCorSetor(setorCriador?.nome || '') }}>{setorCriador?.nome?.length > 18 ? setorCriador.nome.substring(0, 18) + '…' : setorCriador?.nome || 'N/I'}</span>{acao.necessita_transporte && <Car size={16} className="text-blue-500 ml-auto animate-bounce" />}</div>
                                 </div>
                               )
                             })
@@ -1240,9 +1258,9 @@ export default function AgendaPage() {
         </div>
       </div>
 
-      {/* GRÁFICOS PRINCIPAIS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><CheckCircle size={20} className="text-purple-600" /> Status das Ações</h2><ResponsiveContainer width="100%" height={300}><PieChart><Pie data={dadosStatus} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent = 0 }) => `${name}: ${(percent * 100).toFixed(0)}%`}>{dadosStatus.map((entry, index) => <Cell key={index} fill={entry.color} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div>
+      {/* GRÁFICOS */}
+      <div className="space-y-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><CheckCircle size={20} className="text-purple-600" /> Status das Ações</h2><ResponsiveContainer width="100%" height={350}><PieChart><Pie data={dadosStatus} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={120} label={({ name, percent = 0 }) => `${name}: ${(percent * 100).toFixed(0)}%`}>{dadosStatus.map((entry, index) => <Cell key={index} fill={entry.color} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div>
 
         {dadosCancelamento.length > 0 && (
           <div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><AlertCircle size={20} className="text-red-500" /> Motivos de Cancelamento</h2>
@@ -1270,15 +1288,11 @@ export default function AgendaPage() {
           </div>
         )}
 
-        {dadosPorTurno.length > 0 && (<div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Clock size={20} className="text-orange-500" /> Ações por Turno</h2><ResponsiveContainer width="100%" height={300}><PieChart><Pie data={dadosPorTurno} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>{dadosPorTurno.map((entry, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div>)}
+        <div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><List size={20} className="text-cyan-500" /> Ações por Tipo</h2><ResponsiveContainer width="100%" height={350}><BarChart data={dadosPorTipoAcao} layout="vertical" margin={{ left: 120 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis type="category" dataKey="name" width={120} /><Tooltip /><Bar dataKey="value" fill="#06b6d4" name="Quantidade" /></BarChart></ResponsiveContainer></div>
 
-        {dadosPorTipoAcao.length > 0 && (<div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><List size={20} className="text-cyan-500" /> Ações por Tipo</h2><ResponsiveContainer width="100%" height={300}><BarChart data={dadosPorTipoAcao} layout="vertical" margin={{ left: 80 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis type="category" dataKey="name" width={100} /><Tooltip /><Bar dataKey="value" fill="#06b6d4" name="Quantidade" /></BarChart></ResponsiveContainer></div>)}
+        <div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Building2 size={20} className="text-purple-600" /> Ações por Setor</h2><ResponsiveContainer width="100%" height={350}><BarChart data={dadosPorSetor} layout="vertical" margin={{ left: 120 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis type="category" dataKey="nome" /><Tooltip /><Legend /><Bar dataKey="total" fill="#7114dd" name="Total" /><Bar dataKey="realizadas" fill="#22c55e" name="Realizadas" /><Bar dataKey="pendentes" fill="#facc15" name="Pendentes" /></BarChart></ResponsiveContainer></div>
 
-        {dadosPorSetor.length > 0 && (<div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Building2 size={20} className="text-purple-600" /> Ações por Setor</h2><ResponsiveContainer width="100%" height={300}><BarChart data={dadosPorSetor} layout="vertical" margin={{ left: 80 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis type="category" dataKey="nome" /><Tooltip /><Legend /><Bar dataKey="total" fill="#7114dd" name="Total" /><Bar dataKey="realizadas" fill="#22c55e" name="Realizadas" /><Bar dataKey="pendentes" fill="#facc15" name="Pendentes" /></BarChart></ResponsiveContainer></div>)}
-
-        {dadosMensais.length > 0 && (<div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><TrendingUp size={20} className="text-purple-500" /> Tendência Mensal</h2><ResponsiveContainer width="100%" height={300}><LineChart data={dadosMensais}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="mes" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="total" stroke="#7114dd" name="Total" strokeWidth={2} /><Line type="monotone" dataKey="realizadas" stroke="#22c55e" name="Realizadas" strokeWidth={2} /></LineChart></ResponsiveContainer></div>)}
-
-        {dadosParticipantes.length > 0 && (<div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Users size={20} className="text-orange-500" /> Top 10 Participantes</h2><ResponsiveContainer width="100%" height={300}><BarChart data={dadosParticipantes} layout="vertical" margin={{ left: 100 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis type="category" dataKey="name" width={100} /><Tooltip /><Bar dataKey="value" fill="#f97316" name="Quantidade" /></BarChart></ResponsiveContainer></div>)}
+        {dadosPorLocal.length > 0 && (<div className="bg-white p-6 rounded-xl shadow-sm border"><h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><MapPin size={20} className="text-red-500" /> Ações por Local</h2><ResponsiveContainer width="100%" height={350}><BarChart data={dadosPorLocal} layout="vertical" margin={{ left: 120 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis type="category" dataKey="name" width={120} /><Tooltip /><Bar dataKey="value" fill="#ef4444" name="Quantidade" /></BarChart></ResponsiveContainer></div>)}
       </div>
 
       {/* GRÁFICOS DOS CAMPOS EXTRAS */}
@@ -1364,7 +1378,7 @@ export default function AgendaPage() {
                 <div><label className="text-sm text-gray-400 uppercase">Status</label><p className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${modalAcao.status === 'Realizada' ? 'bg-green-100 text-green-700' : modalAcao.status === 'Cancelada' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{modalAcao.status || 'Pendente'}</p>{modalAcao.status === 'Cancelada' && modalAcao.cancelamento_motivo && <p className="text-xs text-red-600 mt-1">Motivo: {modalAcao.cancelamento_motivo === 'transporte' ? 'Falta de transporte disponível' : modalAcao.cancelamento_motivo === 'demandas' ? 'Demandas espontâneas' : modalAcao.cancelamento_motivo}</p>}</div>
                 <div><label className="text-sm text-gray-400 uppercase">Setor</label><p>{setores.find(s => s.id === modalAcao.setor_id)?.nome || 'N/I'}</p></div>
                 <div><label className="text-sm text-gray-400 uppercase">Data/Hora</label><p>{modalAcao.data_inicio ? new Date(modalAcao.data_inicio).toLocaleString('pt-BR') : 'N/A'}</p></div>
-                <div><label className="text-sm text-gray-400 uppercase">Local</label><p>{modalAcao.local || 'Não informado'}</p></div>
+                <div><label className="text-sm text-gray-400 uppercase">Local(is)</label><p>{locaisPorAcao[modalAcao.id]?.join(', ') || modalAcao.local || 'Não informado'}</p></div>
                 <div><label className="text-sm text-gray-400 uppercase">Transporte</label><p>{modalAcao.necessita_transporte ? 'Sim' : 'Não'}</p></div>
                 <div className="col-span-2"><label className="text-sm text-gray-400 uppercase">Participantes</label><p>{(modalAcao.pessoas || []).join(', ') || 'Nenhum'}</p></div>
                 <div className="col-span-2"><label className="text-sm text-gray-400 uppercase">Descrição</label><div className="mt-1 p-3 bg-gray-50 rounded-lg text-sm whitespace-pre-wrap">{modalAcao.descricao || 'Sem descrição'}</div></div>

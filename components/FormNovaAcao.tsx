@@ -217,7 +217,7 @@ export default function FormNovaAcao({
   const [pessoas, setPessoas] = useState<string[]>([])
   const [setoresSelecionados, setSetoresSelecionados] = useState<string[]>([])
   const [tipoAcaoId, setTipoAcaoId] = useState('')
-  const [local, setLocal] = useState('')
+  const [locaisSelecionados, setLocaisSelecionados] = useState<string[]>([])
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
   const [necessitaTransporte, setNecessitaTransporte] = useState(false)
@@ -262,7 +262,6 @@ export default function FormNovaAcao({
       setPessoas(editandoAcao.pessoas || [])
       setSetoresSelecionados(editandoAcao.setores_envolvidos || [])
       setTipoAcaoId(editandoAcao.tipo_acao_id || '')
-      setLocal(editandoAcao.local || '')
       setDataInicio(formatarDataParaExibicao(editandoAcao.data_inicio || ''))
       setDataFim(formatarDataParaExibicao(editandoAcao.data_fim || ''))
       setNecessitaTransporte(editandoAcao.necessita_transporte || false)
@@ -278,6 +277,21 @@ export default function FormNovaAcao({
       setObservacoes(editandoAcao.observacoes || '')
       setMostrarCamposPersonalizados(true)
       setSetorInicialAuto(false)
+
+      const fetchLocaisEdit = async () => {
+        const { data: acaoLocais } = await supabase
+          .from('acao_locais')
+          .select('local_id')
+          .eq('acao_id', editandoAcao.id)
+        if (acaoLocais && acaoLocais.length > 0) {
+          setLocaisSelecionados(acaoLocais.map(al => al.local_id))
+        } else if (editandoAcao.local) {
+          const match = locais.find(l => l.nome === editandoAcao.local)
+          if (match) setLocaisSelecionados([match.id])
+        }
+      }
+      fetchLocaisEdit()
+
       return
     }
 
@@ -385,7 +399,7 @@ export default function FormNovaAcao({
     setPessoas([])
     setSetoresSelecionados([])
     setTipoAcaoId('')
-    setLocal('')
+    setLocaisSelecionados([])
     setDataInicio('')
     setDataFim('')
     setNecessitaTransporte(false)
@@ -415,7 +429,7 @@ export default function FormNovaAcao({
 
     if (!setorSelecionado) { setMensagemErro("Selecione um setor responsável"); return }
     if (!tipoAcaoId) { setMensagemErro("Selecione o Tipo de Ação"); return }
-    if (!local) { setMensagemErro("Selecione o Local"); return }
+    if (locaisSelecionados.length === 0) { setMensagemErro("Selecione pelo menos um local"); return }
     if (!dataInicio?.includes('T')) { setMensagemErro("Preencha a data e horário de início"); return }
     if (!dataFim?.includes('T')) { setMensagemErro("Preencha a data e horário de término"); return }
 
@@ -426,13 +440,14 @@ export default function FormNovaAcao({
       pessoasFinal.push(nomeResponsavel)
     }
 
+    const primeiroLocal = locais.find(l => l.id === locaisSelecionados[0])
     const dadosComuns: Record<string, any> = {
       descricao,
       pessoas: pessoasFinal,
       setores_envolvidos: setoresSelecionados,
       tipo_acao_id: tipoAcaoId,
       setor_id: setorSelecionado,
-      local,
+      local: primeiroLocal?.nome || null,
       data_inicio: dataInicio ? formatarDataParaBanco(dataInicio) : null,
       data_fim: dataFim ? formatarDataParaBanco(dataFim) : null,
       necessita_transporte: necessitaTransporte,
@@ -445,41 +460,58 @@ export default function FormNovaAcao({
       dadosComuns.cancelamento_motivo = cancelamentoMotivo === 'outro' ? cancelamentoOutro.trim() || null : cancelamentoMotivo
     }
 
-    const { error } = editandoAcao
-      ? await supabase.from('acoes').update({
+    try {
+      let acaoId: string | null = editandoAcao?.id || null
+
+      if (editandoAcao) {
+        const { error } = await supabase.from('acoes').update({
           ...dadosComuns,
           updated_at: new Date().toISOString(),
           updated_by: userPerfilId
         }).eq('id', editandoAcao.id)
-      : await supabase.from('acoes').insert([{
+        if (error) throw error
+      } else {
+        const { data, error } = await supabase.from('acoes').insert([{
           ...dadosComuns,
           created_at: new Date().toISOString(),
           created_by: userPerfilId,
           updated_at: new Date().toISOString(),
           updated_by: userPerfilId
-        }])
+        }]).select('id').single()
+        if (error) throw error
+        acaoId = data.id
+      }
 
-    setSalvando(false)
+      if (acaoId) {
+        const { error: delError } = await supabase.from('acao_locais').delete().eq('acao_id', acaoId)
+        if (delError) throw delError
 
-    if (error) {
-      setMensagemErro("Erro ao salvar: " + error.message)
-      return
+        if (locaisSelecionados.length > 0) {
+          const records = locaisSelecionados.map(localId => ({ acao_id: acaoId, local_id: localId }))
+          const { error: insError } = await supabase.from('acao_locais').insert(records)
+          if (insError) throw insError
+        }
+      }
+
+      setSalvando(false)
+      const msg = editandoAcao ? "Ação atualizada com sucesso!" : "Ação criada com sucesso!"
+      resetForm()
+      onSave(msg)
+    } catch (err: any) {
+      setSalvando(false)
+      setMensagemErro("Erro ao salvar: " + (err.message || 'Erro desconhecido'))
     }
-
-    const msg = editandoAcao ? "Ação atualizada com sucesso!" : "Ação criada com sucesso!"
-    resetForm()
-    onSave(msg)
   }
 
   const tipoAcaoSelecionado = tiposAcoes.find(ta => ta.id === tipoAcaoId)
 
   const dataInicioValida = dataInicio?.includes('T')
   const dataFimValida = dataFim?.includes('T')
-  const podeSalvar = tipoAcaoId && local && dataInicioValida && dataFimValida
+  const podeSalvar = tipoAcaoId && locaisSelecionados.length > 0 && dataInicioValida && dataFimValida
 
   const camposObrigatorios = [
     { nome: 'Tipo de Ação', valido: !!tipoAcaoId },
-    { nome: 'Local', valido: !!local },
+    { nome: 'Local(is)', valido: locaisSelecionados.length > 0 },
     { nome: 'Data de Início', valido: dataInicioValida },
     { nome: 'Data de Término', valido: dataFimValida },
   ]
@@ -556,11 +588,33 @@ export default function FormNovaAcao({
                 </select>
               </div>
               <div>
-                <label className="block text-base font-bold text-gray-700 mb-2">Local</label>
-                <select value={local} onChange={(e) => setLocal(e.target.value)} className={`w-full p-3 border rounded-lg ${!local ? 'border-red-400' : ''}`}>
-                  <option value="">Selecione o local</option>
-                  {locais.map(l => <option key={l.id} value={l.nome}>{l.nome}</option>)}
-                </select>
+                <label className="block text-base font-bold text-gray-700 mb-2">Locais <span className="text-sm font-normal text-gray-400">(máx 5)</span></label>
+                <div className={`max-h-48 overflow-y-auto border rounded-lg divide-y divide-gray-100 ${locaisSelecionados.length === 0 ? 'border-red-400' : ''}`}>
+                  {locais.length === 0 ? (
+                    <p className="px-4 py-3 text-sm text-gray-400">Nenhum local cadastrado</p>
+                  ) : locais.map(l => {
+                    const checked = locaisSelecionados.includes(l.id)
+                    return (
+                      <label key={l.id} className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition text-sm ${checked ? 'bg-indigo-50/50' : ''}`}>
+                        <input type="checkbox" checked={checked} onChange={() => {
+                          if (checked) {
+                            setLocaisSelecionados(prev => prev.filter(id => id !== l.id))
+                          } else {
+                            if (locaisSelecionados.length >= 5) {
+                              setMensagemErro("Máximo de 5 locais por ação")
+                              return
+                            }
+                            setLocaisSelecionados(prev => [...prev, l.id])
+                          }
+                        }} className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
+                        <span className="text-gray-700">{l.nome}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+                {locaisSelecionados.length > 0 && (
+                  <p className="text-xs text-gray-400 mt-1">{locaisSelecionados.length} selecionado(s)</p>
+                )}
               </div>
             </div>
           </div>

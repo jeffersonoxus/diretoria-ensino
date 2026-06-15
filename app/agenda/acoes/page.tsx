@@ -35,6 +35,7 @@ export default function AcoesPage() {
   const [setores, setSetores] = useState<Setor[]>([])
   const [tiposAcoes, setTiposAcoes] = useState<TipoAcao[]>([])
   const [locais, setLocais] = useState<Local[]>([])
+  const [locaisPorAcao, setLocaisPorAcao] = useState<Record<string, string[]>>({})
   const [userPerfilId, setUserPerfilId] = useState<string | null>(null)
   const [userNome, setUserNome] = useState<string>('')
   const [userEmail, setUserEmail] = useState<string>('')
@@ -191,7 +192,13 @@ export default function AcoesPage() {
       query = query.in('setor_id', userSetoresIds)
     }
     
-    const { data } = await query
+    const [acoesRes, acaoLocaisRes, locaisRes] = await Promise.all([
+      query,
+      supabase.from('acao_locais').select('acao_id, local_id'),
+      supabase.from('locais').select('id, nome').eq('ativo', true)
+    ])
+    
+    const data = acoesRes.data
     
     if (data) {
       const userIds = new Set<string>()
@@ -200,10 +207,10 @@ export default function AcoesPage() {
         if (acao.updated_by) userIds.add(acao.updated_by)
       })
       
-      const { data: perfis } = await supabase
-        .from('perfis')
-        .select('id, nome, email')
-        .in('id', Array.from(userIds))
+      const [perfisRes] = await Promise.all([
+        supabase.from('perfis').select('id, nome, email').in('id', Array.from(userIds))
+      ])
+      const perfis = perfisRes.data
       
       const nomeMap = new Map(perfis?.map(p => [p.id, p.nome?.trim() || p.email]))
       setAcoes(data.map(acao => ({
@@ -211,6 +218,17 @@ export default function AcoesPage() {
         created_by_nome: nomeMap.get(acao.created_by) || 'Desconhecido',
         updated_by_nome: nomeMap.get(acao.updated_by) || 'Desconhecido'
       })))
+
+      const localMap = new Map((locaisRes.data || []).map(l => [l.id, l.nome]))
+      const locaisMap: Record<string, string[]> = {}
+      ;(acaoLocaisRes.data || []).forEach(al => {
+        if (!locaisMap[al.acao_id]) locaisMap[al.acao_id] = []
+        const nome = localMap.get(al.local_id)
+        if (nome && !locaisMap[al.acao_id].includes(nome)) {
+          locaisMap[al.acao_id].push(nome)
+        }
+      })
+      setLocaisPorAcao(locaisMap)
     }
   }
 
@@ -317,6 +335,7 @@ export default function AcoesPage() {
                       setores={setores}
                       tiposAcoes={tiposAcoes}
                       usuarios={usuarios}
+                      locaisPorAcao={locaisPorAcao}
                       onEdit={carregarParaEdicao}
                       onDelete={deleteAcao}
                     />
@@ -388,7 +407,7 @@ const SemSetor = ({ userPerfilId, userNome }: { userPerfilId: string | null, use
   </div>
 )
 
-const AcaoCard = ({ acao, setores, tiposAcoes, usuarios, onEdit, onDelete }: any) => {
+const AcaoCard = ({ acao, setores, tiposAcoes, usuarios, locaisPorAcao, onEdit, onDelete }: any) => {
   const setorDaAcao = setores.find((s: any) => s.id === acao.setor_id)
   const setoresEnvolvidos = setores.filter((s: any) => acao.setores_envolvidos?.includes(s.id))
   
@@ -431,7 +450,7 @@ const AcaoCard = ({ acao, setores, tiposAcoes, usuarios, onEdit, onDelete }: any
           {acao.descricao && <p className="text-gray-600 mb-3">{acao.descricao}</p>}
           
           <div className="flex flex-wrap gap-4 mb-3 text-sm text-gray-500">
-            {acao.local && <span className="flex items-center gap-1"><MapPin size={14} /> {acao.local}</span>}
+            {(locaisPorAcao[acao.id]?.length > 0 ? locaisPorAcao[acao.id].join(', ') : acao.local) && <span className="flex items-center gap-1"><MapPin size={14} /> {locaisPorAcao[acao.id]?.length > 0 ? locaisPorAcao[acao.id].join(', ') : acao.local}</span>}
             {acao.data_inicio && <span className="flex items-center gap-1"><Calendar size={14} /> Início: {formatarDataParaExibicaoLista(acao.data_inicio)}</span>}
             {acao.data_fim && <span className="flex items-center gap-1"><Calendar size={14} /> Término: {formatarDataParaExibicaoLista(acao.data_fim)}</span>}
             {acao.necessita_transporte && <span className="flex items-center gap-1 text-amber-600"><Truck size={14} /> Transporte</span>}
