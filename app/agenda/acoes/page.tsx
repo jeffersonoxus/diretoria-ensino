@@ -248,6 +248,12 @@ export default function AcoesPage() {
 
   const confirmDelete = async () => {
     if (!modalExcluir) return
+    const acao = acoes.find(a => a.id === modalExcluir.id)
+    const podeExcluir = userNivelAcesso === 'gerencial' || userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo' || (acao && userSetoresIds.includes(acao.setor_id || ''))
+    if (!podeExcluir) {
+      showToast('Você não tem permissão para excluir ações', 'error')
+      return
+    }
     try {
       await supabase.from('acoes').delete().eq('id', modalExcluir.id)
       setModalExcluir(null)
@@ -338,6 +344,8 @@ export default function AcoesPage() {
                       locaisPorAcao={locaisPorAcao}
                       onEdit={carregarParaEdicao}
                       onDelete={deleteAcao}
+                      userNivelAcesso={userNivelAcesso}
+                      userSetoresIds={userSetoresIds}
                     />
                   ))}
                 </div>
@@ -407,7 +415,7 @@ const SemSetor = ({ userPerfilId, userNome }: { userPerfilId: string | null, use
   </div>
 )
 
-const AcaoCard = ({ acao, setores, tiposAcoes, usuarios, locaisPorAcao, onEdit, onDelete }: any) => {
+const AcaoCard = ({ acao, setores, tiposAcoes, usuarios, locaisPorAcao, onEdit, onDelete, userNivelAcesso, userSetoresIds }: any) => {
   const setorDaAcao = setores.find((s: any) => s.id === acao.setor_id)
   const setoresEnvolvidos = setores.filter((s: any) => acao.setores_envolvidos?.includes(s.id))
   
@@ -492,14 +500,16 @@ const AcaoCard = ({ acao, setores, tiposAcoes, usuarios, locaisPorAcao, onEdit, 
         </div>
         
           <div className="flex gap-2 ml-4">
-            {acao.status !== 'Cancelada' && (
+            {(userNivelAcesso === 'gerencial' || userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo' || userSetoresIds?.includes(acao.setor_id)) && acao.status !== 'Cancelada' && (
               <button onClick={() => onEdit(acao)} className="p-2 text-gray-500 hover:text-purple-600 rounded-lg transition" title="Editar">
                 <Pencil size={18} />
               </button>
             )}
-            <button onClick={() => onDelete(acao.id, acao.status)} className="p-2 text-gray-500 hover:text-red-600 rounded-lg transition" title="Excluir">
-              <Trash2 size={18} />
-            </button>
+            {(userNivelAcesso === 'gerencial' || userNivelAcesso === 'diretivo' || userNivelAcesso === 'administrativo' || userSetoresIds?.includes(acao.setor_id)) && (
+              <button onClick={() => onDelete(acao.id, acao.status)} className="p-2 text-gray-500 hover:text-red-600 rounded-lg transition" title="Excluir">
+                <Trash2 size={18} />
+              </button>
+            )}
           </div>
       </div>
     </div>
