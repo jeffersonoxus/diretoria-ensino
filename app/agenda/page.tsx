@@ -62,7 +62,9 @@ export default function AgendaPage() {
   })
   
   // Filtros básicos
-  const [filterSetor, setFilterSetor] = useState<string>('todos')
+  const [filterSetor, setFilterSetor] = useState<string[]>([])
+  const [showSetorDropdown, setShowSetorDropdown] = useState(false)
+  const [showSetorDropdownHeader, setShowSetorDropdownHeader] = useState(false)
   const [filterTipoAcao, setFilterTipoAcao] = useState<string>('todos')
   const [filterStatus, setFilterStatus] = useState<string>('todos')
   const [filterUsuario, setFilterUsuario] = useState<string>('todos')
@@ -76,6 +78,7 @@ export default function AgendaPage() {
   const [mostrarFiltrosExtras, setMostrarFiltrosExtras] = useState(false)
   const [expandirGraficosExtras, setExpandirGraficosExtras] = useState(false)
   const [modalAcao, setModalAcao] = useState<any>(null)
+  const [salvandoStatus, setSalvandoStatus] = useState(false)
   const [modalNovaAcao, setModalNovaAcao] = useState<{ dia: Date; turno: string } | null>(null)
   const [modalCancelar, setModalCancelar] = useState<any>(null)
   const [cancelMotivo, setCancelMotivo] = useState('transporte')
@@ -186,7 +189,7 @@ export default function AgendaPage() {
   const filtroInicialAplicado = useRef(false)
   useEffect(() => {
     if (!loadingAcesso && !filtroInicialAplicado.current && userSetoresIds.length > 0 && userNivelAcesso === 'tecnico') {
-      setFilterSetor(userSetoresIds[0])
+      setFilterSetor([...userSetoresIds])
       filtroInicialAplicado.current = true
     }
   }, [loadingAcesso, userSetoresIds, userNivelAcesso])
@@ -261,7 +264,7 @@ export default function AgendaPage() {
   }
 
   const formatarDataParaPreenchimento = (dia: Date, turno: string): string => {
-    const hora = turno === 'Manhã' ? '08:00' : turno === 'Tarde' ? '14:00' : '19:00'
+    const hora = turno === 'Manhã' ? '08:00' : turno === 'Tarde' ? '13:00' : '18:00'
     return `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, '0')}-${String(dia.getDate()).padStart(2, '0')}T${hora}`
   }
 
@@ -273,8 +276,8 @@ export default function AgendaPage() {
 
   // Tipos de ação disponíveis para o setor selecionado
   const tiposAcaoDisponiveis = useMemo(() => {
-    if (filterSetor === 'todos') return tiposAcoes
-    return tiposAcoes.filter(tipo => tipo.setores_ids?.includes(filterSetor))
+    if (filterSetor.length === 0) return tiposAcoes
+    return tiposAcoes.filter(tipo => tipo.setores_ids?.some(id => filterSetor.includes(id)))
   }, [tiposAcoes, filterSetor])
 
   // Parâmetros extras do tipo de ação selecionado
@@ -289,8 +292,8 @@ export default function AgendaPage() {
     const valoresMap: Record<string, Set<string>> = {}
     let acoesBase = acoes
     
-    if (filterSetor !== 'todos') {
-      acoesBase = acoesBase.filter(a => a.setor_id === filterSetor)
+    if (filterSetor.length > 0) {
+      acoesBase = acoesBase.filter(a => filterSetor.includes(a.setor_id))
     }
     if (filterTipoAcao !== 'todos') {
       acoesBase = acoesBase.filter(a => a.tipo_acao_id === filterTipoAcao)
@@ -335,8 +338,8 @@ export default function AgendaPage() {
   const acoesFiltradas = useMemo(() => {
     let filtradas = acoes
     
-    if (filterSetor !== 'todos') {
-      filtradas = filtradas.filter(a => a.setor_id === filterSetor)
+    if (filterSetor.length > 0) {
+      filtradas = filtradas.filter(a => filterSetor.includes(a.setor_id))
     }
     if (filterTipoAcao !== 'todos') {
       filtradas = filtradas.filter(a => a.tipo_acao_id === filterTipoAcao)
@@ -468,7 +471,7 @@ export default function AgendaPage() {
   }, [acoesFiltradas, tipoRelatorio, setorRelatorio, tipoAcaoRelatorio, incluirPeriodo, dataInicioRelatorio, dataFimRelatorio])
 
   const limparFiltros = () => {
-    setFilterSetor('todos')
+    setFilterSetor([])
     setFilterTipoAcao('todos')
     setFilterStatus('todos')
     setFilterUsuario('todos')
@@ -492,10 +495,14 @@ export default function AgendaPage() {
     setIncluirObservacoes(false)
   }
 
-  const handleSetorChange = (setorId: string) => {
-    setFilterSetor(setorId)
+  const toggleSetor = (id: string) => {
+    setFilterSetor(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])
     setFilterTipoAcao('todos')
     setFiltrosExtras({})
+  }
+
+  const handleSetorChange = (setorId: string) => {
+    // legacy — kept for compatibility, not used with multi-select
   }
 
   const handleTipoAcaoChange = (tipoId: string) => {
@@ -503,7 +510,39 @@ export default function AgendaPage() {
     setFiltrosExtras({})
   }
 
-  const temFiltrosAtivos = filterSetor !== 'todos' || filterTipoAcao !== 'todos' || filterStatus !== 'todos' || 
+  const handleSaveField = async (campo: string, valor: string) => {
+    if (!modalAcao) return
+    try {
+      const { error } = await supabase
+        .from('acoes')
+        .update({ [campo]: valor })
+        .eq('id', modalAcao.id)
+      if (error) throw error
+      setModalAcao((prev: any) => ({ ...prev, [campo]: valor }))
+    } catch (err: any) {
+      showToast('Erro ao salvar: ' + err.message, 'error')
+    }
+  }
+
+  const handleStatusChange = async (novoStatus: string) => {
+    if (!modalAcao || salvandoStatus) return
+    setSalvandoStatus(true)
+    try {
+      const { error } = await supabase
+        .from('acoes')
+        .update({ status: novoStatus })
+        .eq('id', modalAcao.id)
+      if (error) throw error
+      setModalAcao((prev: any) => ({ ...prev, status: novoStatus }))
+      await carregarDados()
+    } catch (err: any) {
+      showToast('Erro ao atualizar status: ' + err.message, 'error')
+    } finally {
+      setSalvandoStatus(false)
+    }
+  }
+
+  const temFiltrosAtivos = filterSetor.length > 0 || filterTipoAcao !== 'todos' || filterStatus !== 'todos' || 
                            filterUsuario !== 'todos' || filterLocal !== '' || filterTransporte !== 'todos' || 
                            filterDataInicio !== '' || filterDataFim !== '' || Object.keys(filtrosExtras).length > 0
 
@@ -1081,18 +1120,35 @@ export default function AgendaPage() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
+            <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1"><Building2 size={14} className="inline mr-1" /> Setor</label>
-              <select value={filterSetor} onChange={(e) => handleSetorChange(e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
-                <option value="todos">Todos os setores</option>
-                {setores.map(setor => <option key={setor.id} value={setor.id}>{setor.nome}</option>)}
-              </select>
+              <button onClick={() => setShowSetorDropdown(!showSetorDropdown)} className="w-full p-2 border border-gray-200 rounded-lg flex items-center justify-between bg-white text-sm">
+                <span className="truncate">{filterSetor.length === 0 ? 'Todos os setores' : `${filterSetor.length} setor(es)`}</span>
+                <ChevronDown size={14} className={`text-gray-400 transition ${showSetorDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              {showSetorDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowSetorDropdown(false)} />
+                  <div className="absolute z-50 mt-1 w-full bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    <label className="flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 text-sm border-b cursor-pointer">
+                      <input type="checkbox" checked={filterSetor.length === 0} onChange={() => { setFilterSetor([]); setFilterTipoAcao('todos'); setFiltrosExtras({}) }} className="w-4 h-4 text-indigo-600 border-gray-300 rounded" />
+                      <span className="font-medium">Todos os setores</span>
+                    </label>
+                    {setores.map(setor => (
+                      <label key={setor.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 text-sm cursor-pointer">
+                        <input type="checkbox" checked={filterSetor.includes(setor.id)} onChange={() => { toggleSetor(setor.id) }} className="w-4 h-4 text-indigo-600 border-gray-300 rounded" />
+                        {setor.nome}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1"><List size={14} className="inline mr-1" /> Tipo de Ação</label>
-              <select value={filterTipoAcao} onChange={(e) => handleTipoAcaoChange(e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500" disabled={filterSetor === 'todos'}>
-                <option value="todos">{filterSetor === 'todos' ? 'Selecione um setor primeiro' : 'Todos os tipos'}</option>
+              <select value={filterTipoAcao} onChange={(e) => handleTipoAcaoChange(e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500" disabled={filterSetor.length === 0}>
+                <option value="todos">{filterSetor.length === 0 ? 'Selecione um setor primeiro' : 'Todos os tipos'}</option>
                 {tiposAcaoDisponiveis.map(tipo => <option key={tipo.id} value={tipo.id}>{tipo.nome}</option>)}
               </select>
             </div>
@@ -1138,7 +1194,7 @@ export default function AgendaPage() {
             </div>
           </div>
 
-          {filterSetor !== 'todos' && filterTipoAcao !== 'todos' && filtrosExtrasDisponiveis.length > 0 && (
+          {filterSetor.length > 0 && filterTipoAcao !== 'todos' && filtrosExtrasDisponiveis.length > 0 && (
             <div className="mt-4 pt-4 border-t">
               <button onClick={() => setMostrarFiltrosExtras(!mostrarFiltrosExtras)} className="flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700 transition">
                 <Settings size={14} /> Filtros por Campos Específicos {mostrarFiltrosExtras ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -1183,7 +1239,25 @@ export default function AgendaPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2"><Calendar size={20} className="text-purple-700" />Agenda Semanal</h2><p className="text-sm text-gray-500 mt-1">{semanaInicio.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })} — {new Date(semanaInicio.getTime() + 6 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p></div>
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2"><Building2 size={14} className="text-gray-400" /><select value={filterSetor} onChange={(e) => handleSetorChange(e.target.value)} className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white"><option value="todos">Todos os setores</option>{setores.map(setor => <option key={setor.id} value={setor.id}>{setor.nome}</option>)}</select></div>
+              <div className="relative flex items-center gap-2"><Building2 size={14} className="text-gray-400" /><button onClick={() => setShowSetorDropdownHeader(!showSetorDropdownHeader)} className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white"><span className="truncate max-w-[120px]">{filterSetor.length === 0 ? 'Todos os setores' : `${filterSetor.length} setor(es)`}</span><ChevronDown size={14} className={`text-gray-400 transition ${showSetorDropdownHeader ? 'rotate-180' : ''}`} /></button>
+              {showSetorDropdownHeader && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowSetorDropdownHeader(false)} />
+                  <div className="absolute top-full right-0 z-50 mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto min-w-[200px]">
+                    <label className="flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 text-sm border-b cursor-pointer">
+                      <input type="checkbox" checked={filterSetor.length === 0} onChange={() => { setFilterSetor([]); setFilterTipoAcao('todos'); setFiltrosExtras({}); setShowSetorDropdownHeader(false) }} className="w-4 h-4 text-indigo-600 border-gray-300 rounded" />
+                      <span className="font-medium">Todos os setores</span>
+                    </label>
+                    {setores.map(setor => (
+                      <label key={setor.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 text-sm cursor-pointer">
+                        <input type="checkbox" checked={filterSetor.includes(setor.id)} onChange={() => toggleSetor(setor.id)} className="w-4 h-4 text-indigo-600 border-gray-300 rounded" />
+                        {setor.nome}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
               <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                 <button onClick={semanaAnterior} className={`px-2 py-1.5 text-sm rounded-md hover:bg-white transition ${!podeNavegar('anterior') && 'opacity-50 cursor-not-allowed'}`} disabled={!podeNavegar('anterior')}>←</button>
                 <button onClick={semanaAtual} className="px-3 py-1.5 text-sm rounded-md bg-purple-600 text-white shadow-sm">Hoje</button>
@@ -1327,12 +1401,33 @@ export default function AgendaPage() {
       {/* Modal de Detalhes da Ação */}
       {modalAcao && (
         <div className="fixed inset-0 bg-black/50 flex text-slate-600 items-center justify-center z-50 p-4" onClick={() => setModalAcao(null)}>
-          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl max-w-[80vw] w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
               <h2 className="text-xl font-bold text-gray-800">Detalhes da Ação</h2>
               <div className="flex items-center gap-3">
                 {(userSetoresIds.includes(modalAcao.setor_id) || (userNivelAcesso && userNivelAcesso !== 'tecnico')) && (
                   <>
+                    <div className="flex items-center gap-2">
+                      {salvandoStatus && <span className="text-xs text-gray-400">Salvando...</span>}
+                      <select
+                        value={modalAcao.status}
+                        onChange={e => handleStatusChange(e.target.value)}
+                        disabled={salvandoStatus}
+                        className={`text-sm font-medium border rounded-lg px-2 py-1 focus:ring-2 focus:ring-indigo-500 ${
+                          modalAcao.status === 'Realizada' ? 'border-green-300 text-green-700 bg-green-50' :
+                          modalAcao.status === 'Cancelada' ? 'border-red-300 text-red-700 bg-red-50' :
+                          modalAcao.status === 'Realizada Parcialmente' ? 'border-blue-300 text-blue-700 bg-blue-50' :
+                          modalAcao.status === 'Reagendada' ? 'border-purple-300 text-purple-700 bg-purple-50' :
+                          'border-amber-300 text-amber-700 bg-amber-50'
+                        }`}
+                      >
+                        <option value="Pendente">Pendente</option>
+                        <option value="Realizada">Realizada</option>
+                        <option value="Realizada Parcialmente">Realizada Parcialmente</option>
+                        <option value="Reagendada">Reagendada</option>
+                        {modalAcao.status === 'Cancelada' && <option value="Cancelada">Cancelada</option>}
+                      </select>
+                    </div>
                     <button
                       onClick={() => {
                         const id = modalAcao.id
@@ -1383,8 +1478,8 @@ export default function AgendaPage() {
                 <div><label className="text-sm text-gray-400 uppercase">Local(is)</label><p>{locaisPorAcao[modalAcao.id]?.join(', ') || modalAcao.local || 'Não informado'}</p></div>
                 <div><label className="text-sm text-gray-400 uppercase">Transporte</label><p>{modalAcao.necessita_transporte ? 'Sim' : 'Não'}</p></div>
                 <div className="col-span-2"><label className="text-sm text-gray-400 uppercase">Participantes</label><p>{(modalAcao.pessoas || []).join(', ') || 'Nenhum'}</p></div>
-                <div className="col-span-2"><label className="text-sm text-gray-400 uppercase">Descrição</label><div className="mt-1 p-3 bg-gray-50 rounded-lg text-sm whitespace-pre-wrap">{modalAcao.descricao || 'Sem descrição'}</div></div>
-                <div className="col-span-2"><label className="text-sm text-gray-400 uppercase">Observações</label><div className="mt-1 p-3 bg-gray-50 rounded-lg text-sm whitespace-pre-wrap">{modalAcao.observacoes || 'Sem observações'}</div></div>
+                <div className="col-span-2"><label className="text-sm text-gray-400 uppercase">Descrição</label><textarea defaultValue={modalAcao.descricao || ''} onBlur={e => { const v = e.target.value.trim(); if (v !== (modalAcao.descricao || '')) handleSaveField('descricao', v) }} className="mt-1 w-full p-3 bg-gray-50 rounded-lg text-sm resize-none focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[60px]" /></div>
+                <div className="col-span-2"><label className="text-sm text-gray-400 uppercase">Observações</label><textarea defaultValue={modalAcao.observacoes || ''} onBlur={e => { const v = e.target.value.trim(); if (v !== (modalAcao.observacoes || '')) handleSaveField('observacoes', v) }} className="mt-1 w-full p-3 bg-gray-50 rounded-lg text-sm resize-none focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[60px]" /></div>
                 <div><label className="text-sm text-gray-400 uppercase">Criado por</label><p>{getUsuarioNome(modalAcao.created_by)}</p></div>
                 <div><label className="text-sm text-gray-400 uppercase">Criado em</label><p>{modalAcao.created_at ? new Date(modalAcao.created_at).toLocaleString('pt-BR') : 'N/A'}</p></div>
                 <div><label className="text-sm text-gray-400 uppercase">Atualizado por</label><p>{getUsuarioNome(modalAcao.updated_by)}</p></div>
