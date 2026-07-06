@@ -109,10 +109,6 @@ export default function DocumentosPage() {
   const documentosFiltrados = useMemo(() => {
     let filtrados = [...documentos]
 
-    if (!isAdmin && userSetoresIds.length > 0) {
-      filtrados = filtrados.filter(d => userSetoresIds.includes(d.setor_id))
-    }
-
     if (busca) {
       const termo = busca.toLowerCase()
       filtrados = filtrados.filter(d =>
@@ -182,7 +178,6 @@ export default function DocumentosPage() {
           <h1 className="text-2xl font-bold text-gray-800">Repositório de Documentos</h1>
           <p className="text-gray-500 text-sm mt-1">
             {documentos.length} documento(s) no repositório
-            {!isAdmin && ` • Visão do seu setor`}
           </p>
         </div>
         <div className="flex gap-2">
